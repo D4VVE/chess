@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Il Taccuino — Trainer di aperture</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<style>
+:root{
+  --inchiostro:#12181C;
+  --pannello:#1A2329;
+  --pannello-alto:#222E35;
+  --osso:#C9B99B;
+  --verderame:#4A6A5F;
+  --testo:#E9E4D9;
+  --testo-tenue:#8B958F;
+  --ambra:#E0A458;
+  --rosa:#C4646E;
+  --riga:#2C3941;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--inchiostro);color:var(--testo)}
+body{
+  font-family:"Inter","Helvetica Neue",system-ui,sans-serif;
+  font-size:15px;line-height:1.5;
+  padding:18px 16px 40px;
+  max-width:980px;margin:0 auto;
+}
+h1{
+  font-family:Iowan Old Style,"Palatino Linotype",Palatino,Georgia,serif;
+  font-weight:400;font-size:30px;letter-spacing:-.01em;line-height:1.1;
+}
+.occhiello{
+  font:500 11px/1 ui-monospace,"SF Mono",Menlo,monospace;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ambra);
+  margin-bottom:10px;
+}
+header p{color:var(--testo-tenue);margin-top:8px;max-width:52ch}
+hr{border:0;border-top:1px solid var(--riga);margin:22px 0}
+
+/* ---- scelta apertura ---- */
+.scelte{display:flex;flex-wrap:wrap;gap:8px}
+#scelta-riga{margin-bottom:16px}
+button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transparent}
+.pill{
+  background:var(--pannello);color:var(--testo);
+  border:1px solid var(--riga);border-radius:999px;
+  padding:9px 15px;transition:.15s;
+}
+.pill:hover,.pill:focus-visible{border-color:var(--ambra);color:var(--ambra);outline:none}
+.pill[aria-pressed="true"]{
+  background:var(--ambra);border-color:var(--ambra);color:#1a1206;font-weight:600;
+}
+.pill[aria-pressed="true"]:hover{color:#1a1206}
+.pill b{font-family:ui-monospace,Menlo,monospace;font-weight:600}
+/* schede: controllo a segmenti */
+#tabs{display:inline-flex;gap:0;background:var(--pannello);border:1px solid var(--riga);border-radius:999px;padding:3px}
+#tabs .pill{border:0;background:transparent;border-radius:999px;padding:8px 16px}
+#tabs .pill[aria-pressed="true"]{background:var(--ambra);color:#1a1206}
+#tabs .pill:not([aria-pressed="true"]):hover{color:var(--ambra)}
+
+/* ---- layout ---- */
+.tavolo{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:26px;align-items:start}
+@media(max-width:760px){.tavolo{grid-template-columns:1fr}}
+
+/* ---- scacchiera ---- */
+.scacchiera{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  grid-template-rows:repeat(8,1fr);
+  aspect-ratio:1;width:100%;max-width:var(--lato-max,none);
+  container-type:inline-size;
+  border:6px solid #2a3942;border-radius:10px;overflow:hidden;
+  box-shadow:0 20px 55px -22px #000, inset 0 0 0 1px rgba(0,0,0,.4);
+  touch-action:manipulation;
+}
+.casa{
+  position:relative;display:flex;align-items:center;justify-content:center;
+  min-width:0;min-height:0;
+  cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+}
+.casa svg{
+  width:86%;height:86%;display:block;
+  filter:drop-shadow(0 2px 2px rgba(0,0,0,.28));
+  pointer-events:none;transition:transform .08s;
+}
+.casa:active svg{transform:scale(.94)}
+.chiara{background:var(--osso)}
+.scura{background:var(--verderame)}
+.sel{box-shadow:inset 0 0 0 4px var(--ambra)}
+.dest::after{
+  content:"";position:absolute;width:30%;height:30%;border-radius:50%;
+  background:rgba(224,164,88,.6);pointer-events:none;
+}
+.dest.occupata::after{
+  width:90%;height:90%;background:none;border-radius:50%;
+  box-shadow:inset 0 0 0 4px rgba(224,164,88,.7);
+}
+.ultima::before{
+  content:"";position:absolute;inset:0;background:rgba(224,164,88,.22);pointer-events:none;
+}
+.scacco{background-image:radial-gradient(circle at 50% 45%,rgba(196,100,110,.95),rgba(196,100,110,0) 68%)}
+.coord{position:absolute;font:600 min(2.4cqw,10px)/1 ui-monospace,monospace;opacity:.5;pointer-events:none}
+.coord.rank{top:3px;left:3px}
+.coord.file{bottom:2px;right:4px}
+.coord.su-chiara{color:#5c5038}
+.coord.su-scura{color:#cfe0d7}
+
+/* ---- strato repertorio ---- */
+.rep{position:absolute;inset:0;border-radius:2px;pointer-events:none}
+.rep-principale{box-shadow:inset 0 0 0 3px var(--ambra)}
+.rep-valida{box-shadow:inset 0 0 0 3px rgba(233,228,217,.72)}
+.rep-sideline{box-shadow:inset 0 0 0 2px rgba(139,149,143,.7)}
+.rep-raro{box-shadow:inset 0 0 0 2px var(--rosa)}
+.san{
+  position:absolute;top:2px;left:2px;pointer-events:none;
+  font:600 min(2.6cqw,11px)/1 ui-monospace,Menlo,monospace;
+  padding:2px 3px;border-radius:2px;background:rgba(18,24,28,.82);
+}
+.san-principale{color:var(--ambra)}
+.san-valida{color:var(--testo)}
+.san-sideline{color:var(--testo-tenue)}
+.san-raro{color:var(--rosa)}
+.legenda{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--testo-tenue)}
+.legenda i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.l1{box-shadow:inset 0 0 0 2px var(--ambra)}
+.l2{box-shadow:inset 0 0 0 2px rgba(233,228,217,.72)}
+.l3{box-shadow:inset 0 0 0 2px rgba(139,149,143,.7)}
+.l4{box-shadow:inset 0 0 0 2px var(--rosa)}
+
+/* ---- taccuino (firma) ---- */
+.taccuino{background:var(--pannello);border:1px solid var(--riga);border-radius:4px;overflow:hidden}
+.taccuino h2{
+  font:500 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--testo-tenue);padding:13px 15px;border-bottom:1px solid var(--riga);
+}
+#linea{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+#linea .riga{display:grid;grid-template-columns:34px 1fr 1fr;border-bottom:1px solid var(--riga)}
+#linea .riga>*{padding:8px 10px}
+#linea .n{color:var(--testo-tenue)}
+#linea .nero{color:var(--ambra)}
+#linea .vuoto{color:var(--testo-tenue);padding:14px 15px;font-size:12px}
+
+#coach{padding:15px}
+#coach .tag{
+  display:inline-block;font:600 10px/1 ui-monospace,monospace;letter-spacing:.14em;
+  text-transform:uppercase;padding:5px 8px;border-radius:3px;margin-bottom:9px;
+}
+.ok{background:rgba(224,164,88,.16);color:var(--ambra)}
+.no{background:rgba(196,100,110,.16);color:var(--rosa)}
+.neutro{background:var(--pannello-alto);color:var(--testo-tenue)}
+#coach p{margin-bottom:10px}
+#coach .mossa{font-family:ui-monospace,Menlo,monospace;color:var(--testo)}
+#coach .opzioni{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+#coach .opzioni .pill{padding:6px 11px;font-size:13px;background:var(--pannello-alto);font-family:ui-monospace,Menlo,monospace}
+#coach .opzioni .op-principale{color:var(--ambra)}
+#coach .opzioni .op-raro{color:var(--rosa)}
+#coach .opzioni .op-sideline{color:var(--testo-tenue)}
+.azioni{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.azioni .pill{padding:7px 12px;font-size:13px;background:var(--pannello-alto)}
+.mini{font-size:12px;color:var(--testo-tenue);margin-top:12px}
+
+/* ---- telefono in orizzontale: schermo largo ma bassissimo ---- */
+@media (orientation:landscape) and (max-height:560px){
+  body{padding:10px 14px 14px;max-width:none}
+  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  header .occhiello{margin:0;order:2}
+  header h1{font-size:20px}
+  header p{display:none}
+  hr{margin:10px 0}
+  .tavolo{grid-template-columns:auto minmax(220px,1fr);gap:16px;align-items:start}
+  .scacchiera{--lato-max:min(100%, calc(100dvh - 132px))}
+  #scelta-riga{margin-bottom:8px}
+  #scelta-riga .occhiello{margin-bottom:6px}
+  .azioni{margin-top:8px}
+  .azioni .pill{padding:6px 10px;font-size:12px}
+  .legenda{margin-top:6px;gap:10px;font-size:11px}
+  #istruzioni{display:none}
+  aside{position:sticky;top:8px}
+  .taccuino{display:flex;flex-direction:column;max-height:calc(100dvh - 60px)}
+  .taccuino h2{padding:9px 13px}
+  #linea{overflow-y:auto;max-height:34dvh}
+  #linea .riga>*{padding:6px 10px}
+  #coach{overflow-y:auto;padding:12px 13px}
+}
+@media (orientation:landscape) and (max-height:560px) and (max-width:820px){
+  .scelte .pill{padding:6px 11px;font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="occhiello">Trainer di aperture</div>
+  <h1>Il Taccuino</h1>
+  <p>Il bianco gioca la sua linea. Tu rispondi con il nero. Ogni mossa finisce sul taccuino, con il giudizio della teoria accanto.</p>
+</header>
+
+<hr>
+
+<div class="tavolo" id="tavolo">
+  <div>
+    <div class="scelte" id="tabs" style="margin-bottom:16px">
+      <button class="pill" data-tab="trainer" aria-pressed="true">Allenamento</button>
+      <button class="pill" data-tab="bot" aria-pressed="false">Contro il bot</button>
+      <button class="pill" data-tab="duo" aria-pressed="false">Due giocatori</button>
+    </div>
+    <div id="scelta-riga">
+      <div class="occhiello" style="color:var(--testo-tenue)">Gioca la prima mossa del bianco, oppure scegli qui</div>
+      <div class="scelte" id="scelte"></div>
+    </div>
+    <div class="scacchiera" id="board"></div>
+    <div class="azioni" style="margin-top:12px">
+      <span id="azioni-trainer" class="azioni" style="margin:0">
+        <button class="pill" id="btn-repertorio" aria-pressed="false">Mostra repertorio</button>
+        <button class="pill" id="btn-esteso" aria-pressed="false">Repertorio esteso</button>
+        <button class="pill" id="btn-bianco" aria-pressed="false">Bianco: automatico</button>
+        <button class="pill" id="btn-ricomincia">Ricomincia</button>
+      </span>
+      <span id="azioni-partita" class="azioni" style="margin:0" hidden>
+        <button class="pill" id="btn-nuova">Nuova partita</button>
+        <button class="pill" id="btn-annulla">Annulla mossa</button>
+        <button class="pill" id="btn-livello" hidden>Livello: medio</button>
+        <button class="pill" id="btn-colore" hidden>Giochi: bianco</button>
+      </span>
+    </div>
+    <div class="legenda" id="legenda" hidden>
+      <span><i class="l1"></i>Linea principale</span>
+      <span><i class="l2"></i>Alternativa valida</span>
+      <span><i class="l3"></i>Giocabile, ma…</span>
+      <span id="leg-raro" hidden><i class="l4"></i>Rara o dubbia</span>
+    </div>
+    <p class="mini" id="istruzioni">Tocca un pezzo bianco, poi la casa di arrivo.</p>
+  </div>
+
+  <aside>
+    <div class="taccuino">
+      <h2 id="titolo-linea">Partita</h2>
+      <div id="linea"></div>
+      <div id="coach"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ============================================================
+   LIBRO DELLE APERTURE
+   nodo bianco: { san, nota, nere:{ SAN: { tag, nota, poi?:nodoBianco } } }
+   ============================================================ */
+const F = (san,nota,nere,tag)=>({san,nota,nere,tag:tag||"principale"});
+const M = (tag,nota,poi)=>({tag,nota,poi});
+
+const LIBRO = [
+/* ---------------------------- 1. e4 ---------------------------- */
+F("e4","Apertura di Re. Occupa il centro e libera donna e alfiere di casa f1 in una mossa sola. È la mossa più diretta e la più aggressiva.",{
+  "e5": M("principale","Simmetria. Il nero contende subito il centro e apre le stesse linee del bianco. Porta alle aperture aperte, le più antiche e le più tattiche.",
+   [
+    F("Nf3","Attacca il pedone e5 e sviluppa un pezzo. Sviluppo con minaccia: la regola d'oro.",{
+      "Nc6": M("principale","Difende e5 sviluppando. La risposta naturale: mai difendere con un pedone quello che puoi difendere con un pezzo.",
+       [
+        F("Bb5","Partita Spagnola (Ruy López). L'alfiere attacca il difensore di e5. L'apertura più studiata della storia.",{
+          "a6": M("principale","Difesa Morphy. Chiedi all'alfiere cosa vuole fare: se cattura in c6 rinuncia alla coppia degli alfieri, se torna indietro hai guadagnato spazio.",
+           [
+            F("Ba4","Il bianco mantiene la pressione sulla diagonale.",{
+              "Nf6": M("principale","Sviluppo con attacco a e4. Il nero non perde tempo a proteggere: contrattacca.",
+                F("O-O","Il bianco arrocca e offre il pedone e4 (variante aperta).",{
+                  "Be7": M("principale","Variante chiusa: il nero completa lo sviluppo e arrocca. Solida, la scelta dei campioni del mondo."),
+                  "Nxe4": M("valida","Variante aperta. Prendere è giocabile ma il pedone non si tiene: dopo 6.d4 il bianco riguadagna materiale con iniziativa.")
+                })),
+              "b5": M("valida","Scaccia l'alfiere subito, ma indebolisce le case chiare a lungo termine. Meglio inserirla dopo aver sviluppato.")
+            }),
+            F("Bxc6","Variante di Scambio. Il bianco cede la coppia degli alfieri per rovinare la struttura nera. Fischer la rese temibile.",{
+              "dxc6": M("principale","Si riprende verso il centro, aprendo l'alfiere di c8. L'unica ripresa seria."),
+              "bxc6": M("sideline","Si riprende verso il bordo: la struttura resta brutta e l'alfiere chiuso.")
+            },"valida")
+           ]),
+          "Nf6": M("valida","Difesa Berlinese. Ignora l'alfiere e attacca e4. Solidissima, famosa per aver frustrato Kasparov."),
+          "Bc5": M("sideline","Solido ma lascia l'alfiere in b5 a fare pressione senza porgli domande."),
+          "d6": M("sideline","Difesa Steinitz. Corretta ma passiva: chiude l'alfiere di c8.")
+        }),
+        F("Bc4","Partita Italiana. L'alfiere punta a f7, la casa più debole del campo nero. Sviluppo naturale e piani chiari: l'apertura da cui si comincia.",{
+          "Bc5": M("principale","Giuoco Piano. Simmetria perfetta: entrambi gli alfieri guardano il punto debole avversario."),
+          "Nf6": M("valida","Difesa dei Due Cavalli. Combattiva: invita 4.Ng5, che attacca f7 ma muove due volte lo stesso pezzo."),
+          "Be7": M("sideline","Difesa ungherese. Solida e modesta: si rinuncia a ogni ambizione per non concedere nulla.")
+        },"valida"),
+        F("d4","Partita Scozzese. Il bianco apre il centro subito invece di manovrare. Rapida, tagliente, meno teorica della Spagnola.",{
+          "exd4": M("principale","Praticamente obbligata: tenere la tensione costa il pedone e5.",
+            F("Nxd4","Il cavallo riprende al centro.",{
+              "Bc5": M("principale","Attacca il cavallo centralizzato e sviluppa. La linea più diretta."),
+              "Nf6": M("valida","Attacca e4 e costringe il bianco a decidere."),
+              "Qh4": M("sideline","Aggressiva ma prematura: la donna esce presto e diventa un bersaglio.")
+            }))
+        },"valida"),
+        F("Nc3","Partita dei Quattro Cavalli. Sviluppo simmetrico e tranquillo. Poco veleno, ma nessuna debolezza.",{
+          "Nf6": M("principale","Simmetria. Posizione sana e bilanciata."),
+          "Bc5": M("valida","Si esce dalla simmetria e si punta su f2.")
+        },"sideline")
+       ]),
+      "Nf6": M("valida","Difesa Petroff. Non difendi, contrattacchi. Reputazione di grande solidità, spesso patta ad alto livello.",
+        F("Nxe5","Il bianco prende. Attenzione: 3...Nxe4? è l'errore classico, dopo 4.Qe2 il nero perde materiale.",{
+          "d6": M("principale","Prima si scaccia il cavallo, poi si riprende il pedone. L'ordine delle mosse è tutto."),
+          "Nxe4": M("sideline","Prematuro. Dopo Qe2 la donna inchioda sulla colonna e e il nero è in difficoltà.")
+        })),
+      "d6": M("sideline","Difesa Philidor. Difende e5 ma imprigiona l'alfiere di f8. Filidor la amava, la teoria moderna meno.")
+    }),
+    F("f4","Gambetto di Re. Il bianco offre un pedone per strappare il centro e aprire la colonna f. Romantico e pericolosissimo, quasi scomparso ad alto livello.",{
+      "exf4": M("principale","Accettato. Prendere è giusto: il pedone è vero e il bianco deve dimostrare il compenso."),
+      "d5": M("valida","Controgambetto Falkbeer. Si restituisce subito il pedone per prendere l'iniziativa al centro."),
+      "Bc5": M("valida","Rifiutato. L'alfiere inchioda sulla diagonale e impedisce l'arrocco: mossa profonda e sicura.")
+    },"sideline"),
+    F("Nc3","Partita Viennese. Sviluppo prima di ogni impegno, con l'idea nascosta di giocare f4 al momento buono.",{
+      "Nf6": M("principale","Sviluppo con attacco a e4. La replica più elastica."),
+      "Nc6": M("valida","Sviluppo naturale. Spesso trasposizione nei Quattro Cavalli.")
+    },"sideline"),
+    F("Bc4","Apertura dell'Alfiere. L'alfiere esce prima del cavallo, tenendo aperta la possibilità di f4 o di d3.",{
+      "Nf6": M("principale","Attacca e4 e prende l'iniziativa."),
+      "Nc6": M("valida","Sviluppo tranquillo, spesso trasposizione nell'Italiana.")
+    },"sideline")
+   ]),
+  "c5": M("principale","Difesa Siciliana. Il nero non imita: contende d4 con un pedone di fianco. Se poi scambia il pedone c per il pedone d del bianco, ottiene una colonna aperta e una maggioranza centrale. È la difesa che vince più partite col nero.",
+   [
+    F("Nf3","Prepara d4. La Siciliana Aperta, il campo di battaglia principale.",{
+      "d6": M("principale","Prepara ...Nf6 senza permettere e5 di scacciare il cavallo.",
+        F("d4","Il bianco apre il centro.",{
+          "cxd4": M("principale","Obbligata di fatto: altrimenti il bianco prende in c5 con vantaggio di spazio.",
+            F("Nxd4","Il cavallo si porta al centro.",{
+              "Nf6": M("principale","Attacca e4 e costringe il bianco a difenderlo, di solito con Nc3.",
+                F("Nc3","Difende e4 sviluppando. Ora il nero sceglie il proprio sistema.",{
+                  "a6": M("principale","Variante Najdorf. Toglie b5 a pezzi bianchi e prepara ...e5 o ...e6. La difesa preferita di Fischer e Kasparov."),
+                  "g6": M("valida","Variante del Drago. L'alfiere in g7 spara sulla diagonale lunga. Doppio filo: il bianco attacca sull'ala di re, il nero sulla colonna c."),
+                  "e6": M("valida","Scheveningen. Struttura a piccolo centro, elastica e solida, ma richiede precisione."),
+                  "Nc6": M("valida","Classica. Sviluppo diretto, senza impegnarsi troppo presto.")
+                }))
+            }))
+        })),
+      "Nc6": M("valida","Sviluppo naturale. Porta alla Sveshnikov o alla Rossolimo dopo 3.Bb5."),
+      "e6": M("valida","Siciliana Paulsen/Kan. Flessibile: tiene aperte le opzioni per l'alfiere di f8.")
+    }),
+    F("Nc3","Siciliana Chiusa. Il bianco rinuncia a d4 e prepara un lento attacco sull'ala di re con g3, Bg2 e f4.",{
+      "Nc6": M("principale","Sviluppo naturale, si contende d4."),
+      "d6": M("valida","Elastica, prepara ...g6 e il fianchetto."),
+      "e6": M("valida","Struttura solida, si prepara ...d5.")
+    },"valida"),
+    F("c3","Variante Alapin. Il bianco prepara d4 sostenendolo. Toglie c3 al cavallo, ma evita tutta la teoria della Siciliana Aperta.",{
+      "Nf6": M("principale","Attacca subito e4, prima che il bianco costruisca il centro."),
+      "d5": M("principale","Colpo al centro. Dopo exd5 Qxd5 la donna non può essere scacciata da Nc3, che è occupata dal pedone."),
+      "e6": M("sideline","Corretta ma lenta: si lascia al bianco il centro ideale con d4.")
+    },"valida"),
+    F("d4","Gambetto Morra. Sacrifica un pedone per sviluppo e colonne aperte. Terribile nel gioco rapido, dubbio nel gioco lungo.",{
+      "cxd4": M("principale","Prendere è giusto. Il pedone è vero."),
+      "Nf6": M("valida","Si declina il gambetto e si trasporta in una struttura sana.")
+    },"sideline")
+   ]),
+  "e6": M("valida","Difesa Francese. Prepara ...d5 sostenuto. Struttura solidissima, ma l'alfiere di c8 resta a lungo un problema da risolvere: è il pezzo che dà nome a questa apertura.",
+    F("d4","Il bianco costruisce il centro ideale.",{
+      "d5": M("principale","Colpisce e4 e definisce la partita.",
+       [
+        F("Nc3","Variante Classica. Difende e4 e mantiene la tensione.",{
+          "Nf6": M("principale","Aumenta la pressione su e4. Il bianco dovrà giocare e5 o Bg5."),
+          "Bb4": M("valida","Variante Winawer. Inchioda il cavallo e minaccia di distruggere la struttura bianca. Tagliente e ricca di teoria."),
+          "dxe4": M("sideline","Variante Rubinstein. Risolve la tensione ma cede il centro: solida, un po' passiva.")
+        }),
+        F("e5","Variante di Avanzamento. Il centro si chiude, il bianco guadagna spazio, il nero attacca la base della catena con ...c5.",{
+          "c5": M("principale","Il piano corretto: si colpisce d4, la base della catena bianca."),
+          "Nc6": M("sideline","Sviluppa, ma rimanda il colpo al centro: il bianco consolida con c3.")
+        },"valida"),
+        F("Nd2","Variante Tarrasch. Difende e4 senza esporre il cavallo all'inchiodatura ...Bb4. Prezzo: il cavallo blocca l'alfiere di c1.",{
+          "c5": M("principale","Colpo immediato: il cavallo in d2 non difende d4."),
+          "Nf6": M("valida","Sviluppo classico, si invita e5.")
+        },"valida"),
+        F("exd5","Variante di Scambio. Struttura simmetrica, colonna e aperta. Reputazione di partita patta, ma va giocata bene.",{
+          "exd5": M("principale","L'unica ripresa naturale. Ora il nero ha finalmente l'alfiere di c8 libero.")
+        },"sideline")
+       ])
+    })),
+  "c6": M("valida","Difesa Caro-Kann. Come la Francese prepara ...d5, ma senza rinchiudere l'alfiere di c8, che uscirà in f5. Prezzo da pagare: uno sviluppo più lento.",
+    F("d4","Centro ideale.",{
+      "d5": M("principale","Il colpo previsto contro e4.",
+       [
+        F("Nc3","Variante Classica. Mantiene la tensione al centro.",{
+          "dxe4": M("principale","La mossa tipica: si scambia e poi si sviluppa l'alfiere con guadagno di tempo.",
+            F("Nxe4","Il cavallo si centralizza.",{
+              "Bf5": M("principale","Il senso di tutta l'apertura: l'alfiere esce fuori dalla catena di pedoni. La Francese sogna questa mossa."),
+              "Nd7": M("valida","Variante Karpov. Prepara ...Ngf6 senza permettere il doppiaggio dei pedoni."),
+              "Nf6": M("sideline","Dopo Nxf6+ il nero resta con pedoni doppiati. Giocabile, ma concede struttura.")
+            }))
+        }),
+        F("e5","Variante di Avanzamento. Chiude il centro e prende spazio. Qui l'alfiere di c8 esce prima di essere chiuso.",{
+          "Bf5": M("principale","Fuori subito, prima che e6 lo imprigioni. Il punto di tutta la Caro-Kann."),
+          "c5": M("valida","Si colpisce la base della catena, come nella Francese.")
+        },"valida"),
+        F("exd5","Variante di Scambio. Semplice e simmetrica.",{
+          "cxd5": M("principale","Si riprende col pedone c, aprendo la colonna e lasciando una struttura sana.")
+        },"sideline"),
+        F("f3","Gambetto Fantasy. Sostiene e4 con un pedone e indebolisce il proprio re. Aggressivo e poco raccomandabile.",{
+          "dxe4": M("principale","Prendere è corretto: il compenso bianco è modesto."),
+          "e6": M("valida","Si declina e si resta solidi.")
+        },"raro")
+       ])
+    })),
+  "Nf6": M("valida","Difesa Alekhine. Provoca: invita i pedoni bianchi ad avanzare per poi attaccarli. Ipermoderna, per chi ama il rischio.",
+    F("e5","Il bianco accetta la sfida e scaccia il cavallo.",{
+      "Nd5": M("principale","L'unica casa sensata.",
+        F("d4","Il bianco costruisce il grande centro.",{
+          "d6": M("principale","Si comincia a demolire: si colpisce la testa della catena.")
+        }))
+    })),
+  "g6": M("sideline","Difesa Moderna. Sviluppo in fianchetto, cede il centro per attaccarlo dopo.",
+    F("d4","Il bianco prende quello che gli si offre.",{
+      "Bg7": M("principale","L'alfiere punta al centro da lontano.")
+    })),
+  "d5": M("sideline","Difesa Scandinava. Immediata ma dopo 2.exd5 Qxd5 3.Nc3 la donna viene scacciata e il bianco sviluppa con tempo.")
+}),
+
+/* ---------------------------- 1. d4 ---------------------------- */
+F("d4","Apertura di Donna. Occupa il centro con un pedone già difeso dalla donna. Gioco più lento e strategico dell'1.e4: si costruisce prima, si attacca dopo.",{
+  "Nf6": M("principale","Impedisce e4. Il nero non concede il centro ideale al bianco e tiene aperte tutte le difese indiane.",
+   [
+    F("c4","Il bianco spinge sull'ala di donna e attacca la casa d5. La strada maestra.",{
+      "e6": M("principale","Flessibile: può portare alla Nimzo-Indiana, alla Ovest-Indiana o al Gambetto di donna rifiutato.",
+        F("Nc3","Il bianco invita la Nimzo-Indiana.",{
+          "Bb4": M("principale","Nimzo-Indiana. Inchioda il cavallo e prepara di raddoppiare i pedoni bianchi. Una delle difese più rispettate di sempre.")
+        })),
+      "g6": M("valida","Fianchetto. Prelude all'Est-Indiana o alla Grünfeld.",
+        F("Nc3","Il bianco costruisce il centro.",{
+          "Bg7": M("principale","Est-Indiana. Il nero cede il centro per poi colpirlo con ...e5 o ...c5. Attacco tipico sull'ala di re."),
+          "d5": M("valida","Difesa Grünfeld. Colpisce il centro subito. Il bianco costruisce un centro grande, il nero lo bombarda dalla diagonale lunga.")
+        })),
+      "c5": M("valida","Benoni. Tagliente e sbilanciata: il nero accetta meno spazio in cambio di gioco attivo sulla colonna e."),
+      "e5": M("sideline","Gambetto Budapest. Sorprendente, ma il pedone si riguadagna e il bianco resta più comodo.")
+    }),
+    F("Nf3","Ordine di mosse flessibile: si evita il Gambetto Budapest e la Benoni, al prezzo di rinunciare per ora a c4.",{
+      "e6": M("principale","Elastica: si prepara ...d5 o ...Bb4."),
+      "g6": M("valida","Fianchetto, come nell'Est-Indiana."),
+      "d5": M("valida","Struttura di Gambetto di donna, con un tempo di sviluppo in più.")
+    },"valida"),
+    F("Bg5","Attacco Trompowsky. L'alfiere esce subito e minaccia di raddoppiare i pedoni neri. Evita ogni teoria indiana.",{
+      "e6": M("principale","Semplice e sano: si dà aria al re e si prepara ...h6."),
+      "Ne4": M("valida","Il cavallo attacca l'alfiere e guadagna tempo. La replica più energica."),
+      "d5": M("valida","Si occupa il centro e si accetta il possibile scambio in f6.")
+    },"sideline")
+   ]),
+  "d5": M("principale","La risposta classica: simmetria e centro contro centro.",
+   [
+    F("c4","Gambetto di donna. Non è un vero gambetto: dopo ...dxc4 il bianco riguadagna il pedone quando vuole.",{
+      "e6": M("principale","Gambetto di donna rifiutato. Solidissimo. Costo: l'alfiere di c8 resta chiuso, come nella Francese.",
+        F("Nc3","Aumenta la pressione su d5.",{
+          "Nf6": M("principale","Sviluppo naturale, difende d5 una terza volta.")
+        })),
+      "c6": M("principale","Difesa Slava. Difende d5 e lascia libera la casa f5 all'alfiere. Il meglio dei due mondi, per questo è così popolare."),
+      "dxc4": M("valida","Gambetto di donna accettato. Il pedone non si può tenere (...b5? è confutato da a4), ma il nero libera il gioco e ottiene ...c5 in tempo."),
+      "e5": M("sideline","Controgambetto Albin. Aggressivo e trappoloso, ma oggettivamente il bianco sta meglio.")
+    }),
+    F("Bf4","Sistema di Londra. Il bianco sviluppa l'alfiere fuori dalla catena e costruisce sempre la stessa struttura, qualunque cosa faccia il nero. Poca teoria, molta solidità.",{
+      "Nf6": M("principale","Sviluppo naturale. Il nero non ha fretta."),
+      "c5": M("principale","La replica più incisiva: si colpisce d4 e si crea un bersaglio su b2."),
+      "e6": M("valida","Solido, ma chiude l'alfiere di c8: nel Londra non serve tanta prudenza.")
+    },"valida"),
+    F("Nf3","Ordine di mosse d'attesa: si sviluppa e si vedrà poi se giocare c4, Bf4 o e3.",{
+      "Nf6": M("principale","Simmetria e sviluppo."),
+      "c5": M("valida","Si contesta subito d4.")
+    },"valida"),
+    F("e4","Gambetto Blackmar-Diemer. Si offre un pedone per sviluppo e attacco sul re. Molto pericoloso in blitz, insufficiente contro una difesa precisa.",{
+      "dxe4": M("principale","Accettare è corretto. Bisogna poi restituire il pedone al momento giusto."),
+      "e6": M("valida","Si declina e si trasporta in una Francese comodissima.")
+    },"raro")
+   ]),
+  "f5": M("sideline","Difesa Olandese. Combattiva, punta all'attacco sull'ala di re, ma indebolisce la diagonale verso il re.",
+    F("g3","Il bianco mette l'alfiere sulla diagonale che il nero ha appena indebolito.",{
+      "Nf6": M("principale","Sviluppo e controllo di e4.")
+    })),
+  "d6": M("sideline","Attesa. Corretta ma cede tempo: il bianco può occupare il centro con e4 senza opposizione.")
+}),
+
+/* ---------------------------- 1. c4 ---------------------------- */
+F("c4","Apertura Inglese. Fianchetto di pedone: il bianco controlla d5 da lontano prima di decidere dove mettere i pedoni centrali. Spesso trasposizione in altre aperture.",{
+  "e5": M("principale","Siciliana a colori invertiti, con un tempo in più per il bianco. Combattiva.",
+    F("Nc3","Sviluppo verso il centro.",{
+      "Nf6": M("principale","Sviluppo naturale e controllo di d5.")
+    })),
+  "Nf6": M("valida","Flessibile: si tiene aperta la possibilità di trasporre nelle difese indiane."),
+  "c5": M("valida","Inglese simmetrica. Equilibrata, spesso si arriva a posizioni di manovra molto lunghe."),
+  "e6": M("valida","Prepara ...d5 e la trasposizione nel Gambetto di donna.")
+}),
+
+/* ---------------------------- 1. Nf3 ---------------------------- */
+F("Nf3","Apertura Réti. Sviluppa, controlla e5 e non impegna nessun pedone. La mossa più flessibile che esista.",{
+  "d5": M("principale","Il nero occupa il centro, invitando il bianco a scoprire le carte.",
+    F("c4","Il senso della Réti: si attacca il centro dal fianco.",{
+      "e6": M("principale","Solido, prepara lo sviluppo. Trasposizione probabile nel Gambetto di donna."),
+      "c6": M("valida","Sostiene d5. Struttura Slava, molto affidabile."),
+      "d4": M("sideline","Avanzare è tentante ma il pedone diventa un bersaglio: il bianco lo attacca con e3 o b4.")
+    })),
+  "Nf6": M("valida","Simmetria. Sviluppo prima di ogni impegno."),
+  "c5": M("valida","Struttura siciliana, spesso trasposizione dopo un futuro e4 o c4.")
+})
+];
+LIBRO.find(n=>n.san==="c4").tag="valida";
+LIBRO.find(n=>n.san==="Nf3").tag="valida";
+
+/* ============================================================
+   REPERTORIO ESTESO — le altre sedici prime mosse legali,
+   più le difese rare nelle linee principali.
+   Tutto ciò che è marcato "raro" appare solo a interruttore acceso.
+   ============================================================ */
+
+/* --- difese rare da innestare nelle quattro aperture principali --- */
+const RARE = {
+  e4:{
+    "Nc6": M("raro","Difesa Nimzowitsch. Provoca d4 per poi colpire il centro. Rara ma non confutata."),
+    "b6":  M("raro","Difesa Owen. L'alfiere in b7 punta su e4. Passiva: il bianco prende il centro senza chiedere permesso."),
+    "d5":  M("sideline","Difesa Scandinava. Immediata, ma dopo 2.exd5 Qxd5 3.Nc3 la donna viene scacciata e il bianco sviluppa guadagnando tempo."),
+    "a6":  M("raro","Difesa San Giorgio. Una mossa che non sviluppa e non tocca il centro. Sorprende, non equilibra."),
+    "Nh6": M("raro","Il cavallo al bordo. Vecchio proverbio: cavallo sul bordo, sempre balordo.")
+  },
+  d4:{
+    "g6":  M("raro","Difesa Moderna. Cede il centro per attaccarlo dopo. Richiede molta pazienza."),
+    "e6":  M("raro","Difesa Horwitz. Elastica: può trasporre in Francese, in Gambetto di donna o nell'Olandese."),
+    "b6":  M("raro","Difesa Inglese di Owen. Fianchetto immediato, sviluppo lento."),
+    "Nc6": M("raro","Difesa Mikenas. Il cavallo blocca il proprio pedone c: strutturalmente discutibile."),
+    "c5":  M("raro","Benoni Antico. Dopo 2.d5 il nero ha meno spazio ma linee aperte sull'ala di donna.")
+  },
+  c4:{
+    "g6":  M("raro","Fianchetto immediato, quasi sempre trasposizione nelle indiane."),
+    "b6":  M("raro","English Defence. Sistema ipermoderno, sorprendente e velenoso."),
+    "f5":  M("raro","Olandese contro l'Inglese. Combattiva ma indebolisce subito il re.")
+  },
+  Nf3:{
+    "g6":  M("raro","Fianchetto. Attende di vedere il centro bianco prima di impegnarsi."),
+    "f5":  M("raro","Olandese. Il bianco può rispondere col gambetto 2.e4!?"),
+    "b5":  M("raro","Gambetto polacco. Il pedone si perde: 2.Nxb5? no, ma 2.e4 dà al bianco un centro gratis.")
+  }
+};
+for(const [san,extra] of Object.entries(RARE)) Object.assign(LIBRO.find(n=>n.san===san).nere, extra);
+
+/* --- le altre sedici prime mosse --- */
+const LIBRO_EXTRA = [
+F("b3","Apertura Nimzo-Larsen. Fianchetto di donna: l'alfiere in b2 spara sulla diagonale lunga verso e5 e il re nero. Sistema rispettabile, giocato da Larsen e Nimzowitsch.",{
+  "e5": M("principale","La risposta più energica: si occupa proprio la casa che l'alfiere vuole controllare.",
+    F("Bb2","L'alfiere prende posto e attacca e5.",{
+      "Nc6": M("principale","Difende e sviluppa. Il nero sta bene."),
+      "d6":  M("valida","Solido: si tiene e5 con un pedone e si apre l'alfiere di c8.")
+    })),
+  "d5": M("valida","Occupazione classica del centro. Semplice e buona."),
+  "Nf6":M("valida","Sviluppo flessibile, controlla e4.")
+},"sideline"),
+
+F("f4","Apertura Bird. Controlla e5 e prepara un attacco sull'ala di re, ma indebolisce la diagonale del proprio re. Olandese a colori invertiti.",{
+  "d5": M("principale","La replica più solida: si occupa il centro e si toglie a e4 ogni prospettiva."),
+  "e5": M("valida","Gambetto From. Si sacrifica un pedone per aprire le linee verso il re bianco indebolito. Tagliente: dopo 2.fxe5 d6 il nero ha un attacco reale."),
+  "Nf6":M("valida","Sviluppo tranquillo, senza concedere nulla.")
+},"sideline"),
+
+F("g3","Apertura Benko, o del fianchetto di re. Lentissima e flessibile: quasi sempre trasposizione nell'Inglese o nella Réti.",{
+  "d5": M("principale","Si prende il centro finché il bianco lo lascia libero."),
+  "e5": M("valida","Ancora meglio: si occupa la casa che l'alfiere in g2 vorrebbe controllare."),
+  "Nf6":M("valida","Sviluppo prima di ogni scelta.")
+},"sideline"),
+
+F("Nc3","Apertura Dunst (o Van Geet). Sviluppa, ma davanti al proprio pedone c: toglie al bianco la spinta c4, che è il suo piano migliore in metà delle aperture.",{
+  "d5": M("principale","Il nero occupa il centro e il cavallo in c3 non ha bersagli."),
+  "e5": M("valida","Solido e attivo."),
+  "c5": M("valida","Trasposizione probabile in una Siciliana chiusa.")
+},"sideline"),
+
+F("b4","Apertura Sokolsky, detta Orango. Il pedone avanza in territorio nemico dove nessuno lo difende. Sorprende una volta, poi si confuta.",{
+  "e5": M("principale","La replica giusta: si attacca subito il pedone di b4 con l'alfiere e si prende il centro.",
+    F("Bb2","Attacca e5, l'unica giustificazione del gambetto.",{
+      "Bxb4": M("principale","Si prende. Il pedone è vero, il compenso bianco è teorico."),
+      "f6":   M("valida","Si difende e5 e si sfida l'alfiere. Solido.")
+    })),
+  "d5": M("valida","Centro contro fianco. Il nero sta comodo.")
+},"sideline"),
+
+F("e3","Apertura Van 't Kruijs. Muove un pedone di una casa e chiude l'alfiere di c1. Non perde, ma cede al nero l'iniziativa in partenza.",{
+  "d5": M("principale","Il nero prende il centro che il bianco ha rinunciato a occupare."),
+  "e5": M("valida","Altrettanto buona."),
+  "Nf6":M("valida","Sviluppo.")
+},"raro"),
+
+F("d3","Apertura Mieses. Prudente fino all'eccesso. Spesso trasposizione nel sistema del re di fianchetto.",{
+  "d5": M("principale","Centro pieno, gioco comodo."),
+  "e5": M("valida","Il nero occupa il centro senza opposizione.")
+},"raro"),
+
+F("c3","Apertura Saragozza. Prepara d4, ma un tempo intero per una mossa che non sviluppa.",{
+  "d5": M("principale","Il centro va occupato."),
+  "e5": M("valida","Anche qui il nero ha già un'apertura comoda.")
+},"raro"),
+
+F("h3","Apertura Clemenz. Non sviluppa, non controlla il centro, non difende nulla. Una mossa d'attesa.",{
+  "d5": M("principale","Il nero costruisce il centro con un tempo in regalo."),
+  "e5": M("valida","Idem.")
+},"raro"),
+
+F("a3","Apertura Anderssen. Mossa d'attesa, giocata per invertire i colori di qualche difesa. Curiosa, non pericolosa.",{
+  "d5": M("principale","Centro subito."),
+  "e5": M("valida","Centro subito.")
+},"raro"),
+
+F("h4","Apertura Kadas. Il pedone di torre avanza senza scopo e indebolisce l'arrocco corto prima ancora di arroccare.",{
+  "d5": M("principale","Occupare il centro è la punizione più semplice."),
+  "e5": M("valida","Il nero sviluppa e attacca.")
+},"raro"),
+
+F("a4","Apertura Ware. Attacca il vuoto e indebolisce b4 e b3.",{
+  "e5": M("principale","Il nero prende il centro senza pensarci."),
+  "d5": M("valida","Altrettanto buona.")
+},"raro"),
+
+F("g4","Attacco Grob. Aggressivo e sbagliato: indebolisce il re e il pedone di g4 è un bersaglio. Trappoloso nel gioco rapido.",{
+  "d5": M("principale","Attacca subito g4 e prende il centro. La confutazione naturale.",
+    F("Bg2","Il bianco attacca d5 per giustificare la spinta.",{
+      "Bxg4": M("principale","Si prende il pedone. È del tutto sano."),
+      "c6":   M("valida","Si difende d5 e si conserva un vantaggio stabile.")
+    })),
+  "e5": M("valida","Anche questa è ottima: centro e sviluppo rapido.")
+},"raro"),
+
+F("f3","Apertura Barnes. Indebolisce la diagonale e1-h4, toglie f3 al cavallo e non sviluppa. La mossa peggiore fra le venti.",{
+  "e5": M("principale","Il nero occupa il centro. Attenzione al matto del matto: dopo 2.g4?? Qh4# la partita finisce."),
+  "d5": M("valida","Solida e vantaggiosa.")
+},"raro"),
+
+F("Nh3","Apertura Amar. Il cavallo va al bordo, dove controlla due case invece di quattro.",{
+  "d5": M("principale","Centro e sviluppo, mentre il cavallo bianco è fuori gioco."),
+  "e5": M("valida","Ugualmente buona.")
+},"raro"),
+
+F("Na3","Apertura Durkin. Il cavallo al bordo, sul lato di donna. Nessuna idea dietro, se non l'effetto sorpresa.",{
+  "d5": M("principale","Il nero prende il centro."),
+  "e5": M("valida","Il nero prende il centro.")
+},"raro")
+];
+
+/* ============================================================ */
+/* ---- pezzi vettoriali, viewBox 0 0 45 45 ---- */
+const PATH={
+ p:'<circle cx="22.5" cy="13" r="5.5"/><path d="M18.5 18.5q-3 6-3.5 14.5h15q-.5-8.5-3.5-14.5z"/><path d="M12.5 33h20l1.8 5.5H10.7z"/>',
+ r:'<path d="M11 38.5h23v-4.5l-3-2v-12l3-2.2V9h-5v3h-3.5V9h-6v3H16V9h-5v6.8l3 2.2v12l-3 2z"/>',
+ n:'<path d="M22 10c10.5 1 16.5 8 16 28.5H15c0-9 10-6.5 8-21M24.5 17.5c.38 2.91-6.05 7.87-8.5 9.5-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4-1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5C13.73 9.506 14 8.5 14 7.5c1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3z"/><circle cx="13" cy="19" r="1.15" data-eye stroke="none"/>',
+ b:'<circle cx="22.5" cy="7.6" r="2.5"/><path d="M22.5 9c4.5 3 5.8 8 4 12 -1 2-1 3 .5 4.5 2 2 3.5 4 5 7.5H13c1.5-3.5 3-5.5 5-7.5 1.5-1.5 1.5-2.5 .5-4.5 -1.8-4-.5-9 4-12z"/><path d="M12.5 33h20l1.8 5.5H10.7z"/>',
+ q:'<path d="M13 24l-1.5-10 6 6 5-9 5 9 6-6-1.5 10z"/><circle cx="11.5" cy="13.5" r="2.2"/><circle cx="22.5" cy="9.5" r="2.4"/><circle cx="33.5" cy="13.5" r="2.2"/><path d="M13 24q-1 5 2 9h15q3-4 2-9z"/><path d="M12.5 33h20l1.8 5.5H10.7z"/>',
+ k:'<path d="M20 7h5v3.5h3.5v5H25V25h-5V15.5h-3.5v-5H20z"/><path d="M15 33q-2.5-9 7.5-9t7.5 9z"/><path d="M12.5 33h20l1.8 5.5H10.7z"/>'
+};
+const COL={
+ w:{fill:"#FBF7EE",stroke:"#1B2226",eye:"#1B2226"},
+ b:{fill:"#1B2226",stroke:"#EFE9DC",eye:"#EFE9DC"}
+};
+function pezzoSVG(t,color){
+  const c=COL[color];
+  const body=PATH[t].replace('data-eye',`fill="${c.eye}"`);
+  return `<svg viewBox="0 0 45 45" fill="${c.fill}" stroke="${c.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
+}
+const ETICHETTE={
+  principale:["ok","Linea principale"],
+  valida:["ok","Alternativa valida"],
+  sideline:["neutro","Giocabile, ma…"],
+  raro:["neutro","Rara o dubbia"]
+};
+
+let game, nodo=null, sel=null, ultima=null, storia=[], finita=false, mostraRep=false, esteso=false;
+let modo="scelta";   // "scelta" = prima mossa del bianco | "gioco" = risponde il nero | "bianco" = si sceglie la replica del bianco
+let lato="w";        // orientamento della scacchiera
+let biancoManuale=false;   // se acceso, le repliche del bianco le scegli tu
+let opzioniBianco=[];      // nodi fra cui scegliere nel modo "bianco"
+
+/* pesi con cui il bianco pesca fra le sue risposte teoriche */
+const PESO={principale:5,valida:3,sideline:2,raro:1};
+
+/* poi può essere un nodo singolo oppure un elenco di nodi:
+   in quel caso il bianco ne pesca uno, e gli altri restano da mostrare */
+function scegliBianco(poi){
+  const lista=(Array.isArray(poi)?poi:[poi]).filter(n=>ammessa(n));
+  if(!lista.length) return {scelto:null,altri:[]};
+  const tot=lista.reduce((s,n)=>s+(PESO[n.tag]||1),0);
+  let x=Math.random()*tot, scelto=lista[0];
+  for(const n of lista){ x-=(PESO[n.tag]||1); if(x<=0){ scelto=n; break; } }
+  return {scelto, altri:lista.filter(n=>n!==scelto)};
+}
+const radici = ()=> esteso ? LIBRO.concat(LIBRO_EXTRA) : LIBRO;
+const ammessa = voce => esteso || voce.tag!=="raro";
+const risposte = ()=> (!nodo||!nodo.nere) ? [] : Object.entries(nodo.nere).filter(([,v])=>ammessa(v));
+
+const $=id=>document.getElementById(id);
+const board=$("board"), coach=$("coach"), lineaEl=$("linea");
+
+/* --- scorciatoia: le stesse aperture in forma di pillole --- */
+function costruisciScelte(){
+  const box=$("scelte"); box.innerHTML="";
+  radici().forEach((n,i)=>{
+    const b=document.createElement("button");
+    b.className="pill";
+    b.innerHTML=`<b>1.${n.san}</b>`;
+    if(n.tag==="raro") b.style.color="var(--testo-tenue)";
+    b.onclick=()=>avvia(i);
+    box.appendChild(b);
+  });
+}
+
+function prepara(){
+  game=new Chess(); nodo=null; sel=null; ultima=null; storia=[]; finita=false; opzioniBianco=[];
+  modo="scelta"; lato="w";
+  costruisciScelte();
+  $("scelta-riga").hidden=false;
+  $("istruzioni").textContent="Tocca un pezzo bianco, poi la casa di arrivo. Sono accettate solo le prime mosse di repertorio.";
+  mostraCoach("neutro","Scegli l'apertura",
+    esteso
+    ? `<p>Gioca tu la prima mossa del bianco: la scacchiera è girata dalla sua parte.</p>
+       <p>Con il repertorio esteso sono accettate <strong>tutte e venti</strong> le prime mosse legali, comprese quelle dubbie. Accendi <em>Mostra repertorio</em> per vederle segnate e giudicate.</p>`
+    : `<p>Gioca tu la prima mossa del bianco: la scacchiera è girata dalla sua parte.</p>
+       <p>Il repertorio riconosce <span class="mossa">e4</span>, <span class="mossa">d4</span>, <span class="mossa">c4</span> e <span class="mossa">Nf3</span>. Per le altre sedici, accendi <em>Repertorio esteso</em>.</p>`);
+  disegna();
+}
+
+function avvia(i){
+  const n=radici()[i];
+  if(modo==="scelta" && storia.length===0) giocaBianco(n.san);
+  nodo=n; modo="gioco"; lato="b"; sel=null;
+  $("scelta-riga").hidden=true;
+  $("istruzioni").textContent="Tocca un pezzo nero, poi la casa di arrivo. La scacchiera è vista dalla tua parte.";
+  mostraCoach("neutro","Tocca al nero", `<p>${n.nota}</p><p class="mini">Trova una risposta di repertorio.</p>`);
+  disegna();
+}
+
+function giocaBianco(san){
+  const m=game.move(san);
+  ultima=[m.from,m.to];
+  storia.push(san);
+}
+
+/* case d'arrivo delle mosse di repertorio nella posizione corrente */
+function caseRepertorio(){
+  const mappa={};
+  const legali=game.moves({verbose:true});
+  const voci = modo==="scelta" ? radici().map(n=>[n.san,{tag:n.tag}])
+             : modo==="bianco" ? opzioniBianco.map(n=>[n.san,{tag:n.tag}])
+             : finita ? [] : risposte();
+  for(const [san,voce] of voci){
+    const m=legali.find(x=>x.san===san);
+    if(m) mappa[m.to]={san,tag:voce.tag};
+  }
+  return mappa;
+}
+
+function reDaProteggere(){
+  if(!game.in_check()) return null;
+  const b=game.board();
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=b[r][c];
+    if(p&&p.type==="k"&&p.color===game.turn()) return "abcdefgh"[c]+(8-r);
+  }
+  return null;
+}
+
+function disegna(){
+  board.innerHTML="";
+  const b=game.board(); // b[0] = riga 8
+  const mosseLegali = sel ? game.moves({square:sel,verbose:true}).map(m=>m.to) : [];
+  const rep = (mostraRep && app==="trainer") ? caseRepertorio() : {};
+  const reScacco = reDaProteggere();
+  // ordine di scansione: dal proprio lato verso l'avversario
+  const righe   = lato==="b" ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  const colonne = lato==="b" ? [7,6,5,4,3,2,1,0] : [0,1,2,3,4,5,6,7];
+  for(const r of righe){
+    for(const c of colonne){
+      const casa="abcdefgh"[c]+(8-r);
+      const p=b[r][c];
+      const scuraCasa=((r+c)%2)===1;
+      const d=document.createElement("div");
+      d.className="casa "+(scuraCasa?"scura":"chiara");
+      if(ultima&&ultima.includes(casa)) d.classList.add("ultima");
+      if(casa===reScacco) d.classList.add("scacco");
+      if(casa===sel) d.classList.add("sel");
+      if(mosseLegali.includes(casa)){ d.classList.add("dest"); if(p) d.classList.add("occupata"); }
+      let html = p ? pezzoSVG(p.type,p.color) : "";
+      const suCasa = scuraCasa ? "su-scura" : "su-chiara";
+      if(c===colonne[0]) html+=`<span class="coord rank ${suCasa}">${8-r}</span>`;
+      if(r===righe[righe.length-1]) html+=`<span class="coord file ${suCasa}">${"abcdefgh"[c]}</span>`;
+      const R=rep[casa];
+      if(R) html+=`<span class="rep rep-${R.tag}"></span><span class="san san-${R.tag}">${R.san}</span>`;
+      d.innerHTML=html;
+      d.onclick=()=>clic(casa);
+      board.appendChild(d);
+    }
+  }
+  aggiornaLinea();
+}
+
+function pilloleBianco(){
+  return `<div class="opzioni">`+opzioniBianco.map((n,i)=>
+    `<button class="pill op-${n.tag}" data-bianco="${i}">${n.san}</button>`).join("")+`</div>`;
+}
+
+/* delega: le pillole vivono dentro il taccuino, che viene riscritto ogni volta */
+coach.addEventListener("click",e=>{
+  const b=e.target.closest("[data-bianco]");
+  if(b) applicaBianco(opzioniBianco[+b.dataset.bianco]);
+});
+
+function applicaBianco(n){
+  giocaBianco(n.san);
+  nodo=n; modo="gioco"; sel=null; opzioniBianco=[];
+  mostraCoach("neutro","Tocca al nero",
+    `<p>Il bianco gioca <span class="mossa">${n.san}</span>. ${n.nota}</p>`);
+  disegna();
+}
+
+function valutaBiancoScelto(m){
+  const n=opzioniBianco.find(x=>x.san===m.san);
+  game.undo();
+  if(!n){
+    disegna();
+    return mostraCoach("no","Non è una replica di repertorio",
+      `<p><span class="mossa">${m.san}</span> è legale, ma qui la teoria gioca ${opzioniBianco.map(o=>`<span class="mossa">${o.san}</span>`).join(", ")}.</p>`+pilloleBianco());
+  }
+  applicaBianco(n);
+}
+
+function clic(casa){
+  if(app!=="trainer") return clicLibero(casa);
+  if(finita) return;
+  const mio = (modo==="gioco") ? "b" : "w";
+  const p=game.get(casa);
+  if(p&&p.color===mio){ sel=(sel===casa?null:casa); return disegna(); }
+  if(!sel) return;
+  const m=game.move({from:sel,to:casa,promotion:"q"});
+  sel=null;
+  if(!m) return disegna();
+  if(modo==="scelta") valutaApertura(m);
+  else if(modo==="bianco") valutaBiancoScelto(m);
+  else valuta(m);
+}
+
+/* prima mossa del bianco giocata sulla scacchiera */
+function valutaApertura(m){
+  const R=radici();
+  const i=R.findIndex(n=>n.san===m.san);
+  if(i<0){
+    const inEsteso = !esteso && LIBRO_EXTRA.some(n=>n.san===m.san);
+    game.undo();
+    disegna();
+    return mostraCoach("no", inEsteso ? "Serve il repertorio esteso" : "Non è nel repertorio",
+      inEsteso
+      ? `<p><span class="mossa">${m.san}</span> è una prima mossa reale, ma sta nel libro esteso. Accendi <em>Repertorio esteso</em> e riprova.</p>`
+      : `<p><span class="mossa">${m.san}</span> è legale ma non compare nel libro.</p>
+         <p>Riconosciute: ${R.map(n=>`<span class="mossa">${n.san}</span>`).join(", ")}.</p>`);
+  }
+  ultima=[m.from,m.to];
+  storia.push(m.san);
+  avvia(i);
+}
+
+function valuta(m){
+  const voce = nodo.nere && nodo.nere[m.san];
+  if(!voce || !ammessa(voce)){
+    const alt=risposte().map(([s])=>s);
+    const bloccata = voce && !ammessa(voce);
+    game.undo();
+    disegna();
+    mostraCoach("no", bloccata ? "Serve il repertorio esteso" : "Fuori repertorio",
+      bloccata
+      ? `<p><span class="mossa">${m.san}</span> — ${voce.nota}</p>
+         <p class="mini">È una difesa rara: accendi <em>Repertorio esteso</em> per giocarla.</p>`
+      : `<p><span class="mossa">${m.san}</span> è legale, ma non fa parte delle risposte teoriche in questa posizione.</p>
+         <p>Qui il repertorio gioca: ${alt.map(a=>`<span class="mossa">${a}</span>`).join(", ")}.</p>
+         <p class="mini">Riprova con una mossa di repertorio.</p>`);
+    ultimaTentata=m.san;
+    return;
+  }
+  ultima=[m.from,m.to];
+  storia.push(m.san);
+  ultimaTentata=null;
+
+  const [cls,tit]=ETICHETTE[voce.tag];
+  let corpo=`<p><span class="mossa">${m.san}</span> — ${voce.nota}</p>`;
+
+  if(voce.poi){
+    const lista=(Array.isArray(voce.poi)?voce.poi:[voce.poi]).filter(n=>ammessa(n));
+    if(!lista.length){
+      finita=true;
+      corpo+=`<p>Fine della linea.</p>`;
+    }else if(biancoManuale && lista.length>1){
+      opzioniBianco=lista;
+      modo="bianco";
+      mostraCoach(cls,tit,
+        corpo+`<p>Ora tocca al bianco: <strong>scegli tu</strong> la replica, sulla scacchiera o qui sotto.</p>`+pilloleBianco());
+      disegna();
+      return;
+    }else{
+      const {scelto,altri}=scegliBianco(lista);
+      giocaBianco(scelto.san);
+      nodo=scelto;
+      corpo+=`<p>Il bianco risponde <span class="mossa">${scelto.san}</span>. ${scelto.nota}</p>`;
+      if(altri.length) corpo+=`<p class="mini">Poteva anche giocare ${altri.map(a=>`<span class="mossa">${a.san}</span>`).join(", ")}.</p>`;
+    }
+  }else{
+    finita=true;
+    corpo+=`<p>Fine della linea. Hai raggiunto una posizione di apertura sana: pezzi sviluppati, centro contestato, re presto al sicuro.</p>
+            <p class="mini">Cambia apertura per allenarne un'altra.</p>`;
+  }
+  mostraCoach(cls,tit,corpo);
+  disegna();
+}
+
+let ultimaTentata=null;
+
+function mostraCoach(cls,tit,html){
+  coach.innerHTML=`<div class="tag ${cls}">${tit}</div>${html}`;
+}
+
+function aggiornaLinea(){
+  if(!storia.length){ lineaEl.innerHTML=`<div class="vuoto">Nessuna mossa.</div>`; return; }
+  let h="";
+  for(let i=0;i<storia.length;i+=2){
+    h+=`<div class="riga"><span class="n">${i/2+1}.</span><span>${storia[i]}</span><span class="nero">${storia[i+1]||"…"}</span></div>`;
+  }
+  lineaEl.innerHTML=h;
+}
+
+/* --- azioni --- */
+$("btn-ricomincia").onclick=()=>prepara();
+
+$("btn-repertorio").onclick=()=>{
+  mostraRep=!mostraRep;
+  const b=$("btn-repertorio");
+  b.setAttribute("aria-pressed",String(mostraRep));
+  b.textContent = mostraRep ? "Nascondi repertorio" : "Mostra repertorio";
+  $("legenda").hidden=!mostraRep;
+  disegna();
+};
+
+$("btn-esteso").onclick=()=>{
+  esteso=!esteso;
+  const b=$("btn-esteso");
+  b.setAttribute("aria-pressed",String(esteso));
+  b.textContent = esteso ? "Repertorio ristretto" : "Repertorio esteso";
+  $("leg-raro").hidden=!esteso;
+  if(modo==="scelta"){ prepara(); }
+  else { costruisciScelte(); disegna(); }
+};
+
+$("btn-bianco").onclick=()=>{
+  biancoManuale=!biancoManuale;
+  const b=$("btn-bianco");
+  b.setAttribute("aria-pressed",String(biancoManuale));
+  b.textContent = biancoManuale ? "Bianco: scegli tu" : "Bianco: automatico";
+};
+
+/* ============================================================
+   PARTITA LIBERA: contro il bot, oppure in due sulla stessa scacchiera
+   ============================================================ */
+let app="trainer";
+const bot={umano:"w", profondita:2, pensa:false};
+const LIVELLI=[["facile",1],["medio",2],["difficile",3]];
+let livello=1;
+
+const VALORE={p:100,n:320,b:330,r:500,q:900,k:0};
+/* tabelle posizionali, dalla a8 alla h1, dal punto di vista del bianco */
+const TAB={
+p:[0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10,
+   5,5,10,25,25,10,5,5, 0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5,
+   5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+n:[-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30,
+   -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30,
+   -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+b:[-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10,
+   -10,5,5,10,10,5,5,-10, -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10,
+   -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+r:[0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5,
+   -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5,
+   -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+q:[-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10,
+   -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10,
+   -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+k:[-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30,
+   -30,-40,-40,-50,-50,-40,-40,-30, -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10,
+   20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20]
+};
+
+/* valutazione dal punto di vista di chi deve muovere */
+function valutaPosizione(g){
+  let s=0;
+  const b=g.board();
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=b[r][c]; if(!p) continue;
+    const i = p.color==="w" ? r*8+c : (7-r)*8+c;   // il nero legge la tabella specchiata
+    const v = VALORE[p.type] + TAB[p.type][i];
+    s += p.color==="w" ? v : -v;
+  }
+  return g.turn()==="w" ? s : -s;
+}
+
+/* negamax con potatura alfa-beta e ordinamento per catture */
+function cerca(g,prof,alfa,beta){
+  const mosse=g.moves({verbose:true});
+  if(!mosse.length) return g.in_check() ? -99000-prof : 0;   // matto o stallo
+  if(prof===0) return valutaPosizione(g);
+  mosse.sort((x,y)=>(y.captured?VALORE[y.captured]:0)-(x.captured?VALORE[x.captured]:0));
+  let meglio=-Infinity;
+  for(const m of mosse){
+    g.move(m);
+    const s=-cerca(g,prof-1,-beta,-alfa);
+    g.undo();
+    if(s>meglio) meglio=s;
+    if(meglio>alfa) alfa=meglio;
+    if(alfa>=beta) break;   // il ramo è già peggiore di uno esplorato: si pota
+  }
+  return meglio;
+}
+
+function mossaBot(){
+  if(finita) return;
+  bot.pensa=true;
+  const prof=LIVELLI[livello][1];
+  const mosse=game.moves({verbose:true});
+  let meglio=-Infinity, candidate=[];
+  for(const m of mosse){
+    game.move(m);
+    const s=-cerca(game,prof-1,-Infinity,Infinity);
+    game.undo();
+    if(s>meglio){ meglio=s; candidate=[m]; }
+    else if(s===meglio) candidate.push(m);   // fra mosse pari, si pesca: il bot non si ripete
+  }
+  const m=candidate[Math.floor(Math.random()*candidate.length)];
+  const f=game.move(m);
+  ultima=[f.from,f.to]; storia.push(f.san);
+  bot.pensa=false;
+  aggiornaStato();
+  disegna();
+}
+
+function nuovaPartita(){
+  game=new Chess(); sel=null; ultima=null; storia=[]; finita=false; opzioniBianco=[];
+  bot.pensa=false;
+  lato = app==="bot" ? bot.umano : "w";
+  aggiornaStato();
+  disegna();
+  if(app==="bot" && game.turn()!==bot.umano) setTimeout(mossaBot,300);
+}
+
+function materiale(){
+  let s=0;
+  for(const riga of game.board()) for(const p of riga)
+    if(p) s += (p.color==="w"?1:-1)*VALORE[p.type];
+  const d=Math.round(s/100);
+  return d===0 ? "materiale pari" : (d>0 ? `bianco +${d}` : `nero +${-d}`);
+}
+
+function aggiornaStato(){
+  const turno = game.turn()==="w" ? "bianco" : "nero";
+  if(game.in_checkmate()){
+    finita=true;
+    const vinc = game.turn()==="w" ? "nero" : "bianco";
+    return mostraCoach("ok","Scacco matto",`<p>Vince il ${vinc}. La partita è finita in ${Math.ceil(storia.length/2)} mosse.</p>`);
+  }
+  if(game.in_stalemate()){ finita=true; return mostraCoach("neutro","Stallo",`<p>Il ${turno} non ha mosse legali e non è sotto scacco: patta.</p>`); }
+  if(game.in_threefold_repetition()){ finita=true; return mostraCoach("neutro","Patta","<p>Terza ripetizione della stessa posizione.</p>"); }
+  if(game.insufficient_material()){ finita=true; return mostraCoach("neutro","Patta","<p>Materiale insufficiente per dare matto.</p>"); }
+  if(game.in_draw()){ finita=true; return mostraCoach("neutro","Patta","<p>Cinquanta mosse senza catture né mosse di pedone.</p>"); }
+
+  const scacco = game.in_check() ? " — <strong>sotto scacco</strong>" : "";
+  const chi = app==="bot"
+    ? (game.turn()===bot.umano ? "Tocca a te" : "Il bot pensa")
+    : `Tocca al ${turno}`;
+  mostraCoach(game.in_check()?"no":"neutro", chi,
+    `<p>Muove il ${turno}${scacco}. Situazione: ${materiale()}.</p>
+     <p class="mini">Tocca un pezzo per vedere tutte le sue mosse legali.</p>`);
+}
+
+function clicLibero(casa){
+  if(finita||bot.pensa) return;
+  const turno=game.turn();
+  if(app==="bot" && turno!==bot.umano) return;
+  const p=game.get(casa);
+  if(p&&p.color===turno){ sel=(sel===casa?null:casa); return disegna(); }
+  if(!sel) return;
+  const m=game.move({from:sel,to:casa,promotion:"q"});   // promozione automatica a donna
+  sel=null;
+  if(!m) return disegna();
+  ultima=[m.from,m.to]; storia.push(m.san);
+  if(app==="duo") lato=game.turn();   // la scacchiera si gira verso chi deve muovere
+  aggiornaStato();
+  disegna();
+  if(app==="bot" && !finita) setTimeout(mossaBot,220);
+}
+
+/* --- schede --- */
+function setApp(a){
+  app=a;
+  document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.tab===a)));
+  $("azioni-trainer").hidden = a!=="trainer";
+  $("azioni-partita").hidden = a==="trainer";
+  $("btn-livello").hidden = a!=="bot";
+  $("btn-colore").hidden  = a!=="bot";
+  $("scelta-riga").hidden = a!=="trainer";
+  $("legenda").hidden = true;
+  if(a==="trainer"){ mostraRep=false; $("btn-repertorio").textContent="Mostra repertorio"; prepara(); }
+  else{
+    $("istruzioni").textContent = a==="bot"
+      ? "Tocca un pezzo per vedere le sue mosse legali. Le promozioni diventano automaticamente donna."
+      : "Stessa scacchiera per due giocatori: si gira da sola verso chi deve muovere.";
+    nuovaPartita();
+  }
+}
+document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>setApp(b.dataset.tab));
+
+$("btn-nuova").onclick=()=>nuovaPartita();
+
+$("btn-annulla").onclick=()=>{
+  if(bot.pensa||!storia.length) return;
+  game.undo(); storia.pop();
+  if(app==="bot" && storia.length && game.turn()!==bot.umano){ game.undo(); storia.pop(); }
+  if(app==="duo") lato=game.turn();
+  finita=false; sel=null;
+  const ult=game.history({verbose:true}).slice(-1)[0];
+  ultima = ult ? [ult.from,ult.to] : null;
+  aggiornaStato(); disegna();
+};
+
+$("btn-livello").onclick=()=>{
+  livello=(livello+1)%3;
+  $("btn-livello").textContent=`Livello: ${LIVELLI[livello][0]}`;
+};
+
+$("btn-colore").onclick=()=>{
+  bot.umano = bot.umano==="w" ? "b" : "w";
+  $("btn-colore").textContent = `Giochi: ${bot.umano==="w"?"bianco":"nero"}`;
+  nuovaPartita();
+};
+
+/* --- avvio --- */
+prepara();
+</script>
+</body>
+</html>
