@@ -664,6 +664,8 @@ let modo="scelta";   // "scelta" = prima mossa del bianco | "gioco" = risponde i
 let lato="w";        // orientamento della scacchiera
 let biancoManuale=false;   // se acceso, le repliche del bianco le scegli tu
 let opzioniBianco=[];      // nodi fra cui scegliere nel modo "bianco"
+let daAnimare=null;        // {from,to} della mossa da far scivolare, consumata da disegna()
+const RIDOTTO = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /* pesi con cui il bianco pesca fra le sue risposte teoriche */
 const PESO={principale:5,valida:3,sideline:2,raro:1};
@@ -726,6 +728,7 @@ function avvia(i){
 function giocaBianco(san){
   const m=game.move(san);
   ultima=[m.from,m.to];
+  daAnimare={from:m.from,to:m.to};
   storia.push(san);
 }
 
@@ -781,10 +784,35 @@ function disegna(){
       if(R) html+=`<span class="rep rep-${R.tag}"></span><span class="san san-${R.tag}">${R.san}</span>`;
       d.innerHTML=html;
       d.onclick=()=>clic(casa);
+      if(daAnimare && casa===daAnimare.to) d.dataset.arrivo="1";
       board.appendChild(d);
     }
   }
   aggiornaLinea();
+
+  // scorrimento del pezzo che ha appena mosso: parte dalla casa di partenza e scivola a destinazione
+  if(daAnimare && !RIDOTTO){
+    const mossa=daAnimare;
+    const idx=casa=>({c:"abcdefgh".indexOf(casa[0]), r:8-(+casa[1])});
+    const gp=idx(mossa.from), gt=idx(mossa.to);
+    // scarto in numero di case nello spazio schermo (tiene conto dell'orientamento)
+    const dcol=(colonne.indexOf(gp.c)-colonne.indexOf(gt.c));
+    const drow=(righe.indexOf(gp.r)-righe.indexOf(gt.r));
+    const casaArrivo=board.querySelector('[data-arrivo="1"]');
+    const svg=casaArrivo && casaArrivo.querySelector("svg");
+    if(svg && (dcol||drow)){
+      casaArrivo.style.position="relative";
+      casaArrivo.style.zIndex="5";
+      svg.style.transition="none";
+      svg.style.transform=`translate(${dcol*12.5}cqw, ${drow*12.5}cqw)`;
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        svg.style.transition="transform .19s cubic-bezier(.22,.61,.36,1)";
+        svg.style.transform="translate(0,0)";
+      }));
+      svg.addEventListener("transitionend",()=>{ casaArrivo.style.zIndex=""; },{once:true});
+    }
+  }
+  daAnimare=null;
 }
 
 function pilloleBianco(){
@@ -847,6 +875,7 @@ function valutaApertura(m){
          <p>Riconosciute: ${R.map(n=>`<span class="mossa">${n.san}</span>`).join(", ")}.</p>`);
   }
   ultima=[m.from,m.to];
+  daAnimare={from:m.from,to:m.to};
   storia.push(m.san);
   avvia(i);
 }
@@ -869,6 +898,7 @@ function valuta(m){
     return;
   }
   ultima=[m.from,m.to];
+  daAnimare={from:m.from,to:m.to};
   storia.push(m.san);
   ultimaTentata=null;
 
@@ -1024,7 +1054,7 @@ function mossaBot(){
   }
   const m=candidate[Math.floor(Math.random()*candidate.length)];
   const f=game.move(m);
-  ultima=[f.from,f.to]; storia.push(f.san);
+  ultima=[f.from,f.to]; daAnimare={from:f.from,to:f.to}; storia.push(f.san);
   bot.pensa=false;
   aggiornaStato();
   disegna();
@@ -1078,7 +1108,7 @@ function clicLibero(casa){
   const m=game.move({from:sel,to:casa,promotion:"q"});   // promozione automatica a donna
   sel=null;
   if(!m) return disegna();
-  ultima=[m.from,m.to]; storia.push(m.san);
+  ultima=[m.from,m.to]; daAnimare={from:m.from,to:m.to}; storia.push(m.san);
   if(app==="duo") lato=game.turn();   // la scacchiera si gira verso chi deve muovere
   aggiornaStato();
   disegna();
