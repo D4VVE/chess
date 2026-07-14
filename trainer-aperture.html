@@ -57,6 +57,12 @@ button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transpar
 #tabs{display:inline-flex;gap:0;background:var(--pannello);border:1px solid var(--riga);border-radius:999px;padding:3px}
 #tabs .pill{border:0;background:transparent;border-radius:999px;padding:8px 16px}
 #tabs .pill[aria-pressed="true"]{background:var(--ambra);color:#1a1206}
+#finali .pill{border-left:4px solid var(--riga)}
+#finali .op-principale{border-left-color:#7FB77E}
+#finali .op-valida{border-left-color:var(--ambra)}
+#finali .op-sideline{border-left-color:#D98E4B}
+#finali .op-raro{border-left-color:var(--rosa)}
+#finali .pill[aria-pressed="true"]{background:var(--ambra);border-color:var(--ambra);color:#1a1206}
 #tabs .pill:not([aria-pressed="true"]):hover{color:var(--ambra)}
 
 /* ---- layout ---- */
@@ -204,6 +210,11 @@ button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transpar
       <button class="pill" data-tab="trainer" aria-pressed="true">Allenamento</button>
       <button class="pill" data-tab="bot" aria-pressed="false">Contro il bot</button>
       <button class="pill" data-tab="duo" aria-pressed="false">Due giocatori</button>
+      <button class="pill" data-tab="finale" aria-pressed="false">Finali</button>
+    </div>
+    <div id="finale-riga" hidden>
+      <div class="occhiello" style="color:var(--testo-tenue)">Scegli un finale, dal più facile al più difficile</div>
+      <div class="scelte" id="finali"></div>
     </div>
     <div id="scelta-riga">
       <div class="occhiello" style="color:var(--testo-tenue)">Gioca la prima mossa del bianco, oppure scegli qui</div>
@@ -984,6 +995,63 @@ let app="trainer";
 const bot={umano:"w", profondita:2, pensa:false};
 const LIVELLI=[["facile",1],["medio",2],["difficile",3]];
 let livello=1;
+const controBot = ()=> app==="bot" || app==="finale";
+
+/* --- catalogo finali, dal più facile al più difficile --- */
+const FINALI=[
+ {nome:"Due Torri", tag:"principale", fen:"3k4/8/8/8/8/8/8/R2K3R w - - 0 1",
+  tecnica:"La scala. Le due torri spingono il re verso il bordo una traversa alla volta. Quando il re minaccia una torre, spostala all'altro lato della scacchiera e continua a salire. Qui non serve nemmeno il tuo re."},
+ {nome:"Donna e Re", tag:"principale", fen:"4k3/8/8/8/8/8/8/3QK3 w - - 0 1",
+  tecnica:"Il metodo della scatola. Tieni la donna a distanza di cavallo dal re nemico: la gabbia si stringe da sola. Porta il tuo re a sostegno e dai matto sul bordo. Attento allo stallo: se il re nemico resta senza mosse ma non è sotto scacco, è patta."},
+ {nome:"Torre e Re", tag:"valida", fen:"4k3/8/8/8/8/8/8/R3K3 w - - 0 1",
+  tecnica:"Qui il tuo re è indispensabile. La torre taglia una traversa, il tuo re conquista l'opposizione e spinge quello avversario contro il bordo. Il matto arriva coi due re in opposizione e la torre che dà scacco."},
+ {nome:"Due Alfieri", tag:"sideline", fen:"4k3/8/8/8/8/8/8/2B1KB2 w - - 0 1",
+  tecnica:"I due alfieri controllano diagonali parallele e alzano un muro. Sospingi il re verso un angolo qualunque, con l'aiuto del tuo re, e chiudi la rete. Serve pazienza: il re nemico può correre a lungo lungo il bordo."},
+ {nome:"Alfiere e Cavallo", tag:"raro", fen:"4k3/8/8/8/8/8/8/2B1K1N1 w - - 0 1",
+  tecnica:"Il finale base più difficile. Il matto si dà solo nell'angolo del colore dell'alfiere. Prima caccia il re in un angolo qualsiasi, poi conducilo lungo il bordo fino all'angolo giusto con la manovra a W del cavallo. Tutto entro 50 mosse."},
+ {nome:"Re e Pedone", tag:"valida", fen:"4k3/8/8/4P3/4K3/8/8/8 w - - 0 1",
+  tecnica:"Decide l'opposizione. Col tuo re davanti al pedone e l'opposizione in mano, la promozione è forzata. Se è il re nemico a prendere l'opposizione davanti al pedone, è patta. Regola d'oro: spingi il pedone solo dopo aver portato avanti il re."},
+];
+let finaleCorrente=null;
+
+function costruisciFinali(){
+  const box=$("finali"); box.innerHTML="";
+  FINALI.forEach((f,i)=>{
+    const b=document.createElement("button");
+    b.className="pill op-"+f.tag;   // riuso i colori di grado
+    b.textContent=f.nome;
+    b.onclick=()=>caricaFinale(i);
+    box.appendChild(b);
+  });
+}
+
+function caricaFinale(i){
+  finaleCorrente=FINALI[i];
+  game=new Chess(finaleCorrente.fen);
+  bot.umano="w"; lato="w"; sel=null; ultima=null; daAnimare=null; storia=[]; finita=false; bot.pensa=false;
+  document.querySelectorAll("#finali .pill").forEach((p,k)=>p.setAttribute("aria-pressed",String(k===i)));
+  statoFinale();
+  disegna();
+}
+
+function statoFinale(){
+  const t=finaleCorrente;
+  if(!t) return;
+  if(game.in_checkmate()){
+    finita=true;
+    return mostraCoach("ok","Matto!",`<p>Hai eseguito il finale <strong>${t.nome}</strong> in ${Math.ceil(storia.length/2)} mosse. Tecnica riuscita.</p><p class="mini">Scegli un altro finale, o ricomincia questo.</p>`);
+  }
+  if(game.in_stalemate()){
+    finita=true;
+    return mostraCoach("no","Stallo — patta",`<p>Il re nemico non ha mosse ma non è sotto scacco: è patta, il matto è sfumato. È l'errore classico di questi finali.</p><p class="mini">Ricomincia e lascia sempre una via d'uscita finché non arriva lo scacco.</p>`);
+  }
+  if(game.insufficient_material()||game.in_draw()){
+    finita=true;
+    return mostraCoach("no","Patta",`<p>Materiale o mosse insufficienti per il matto. Ricomincia il finale.</p>`);
+  }
+  const scacco = game.in_check() ? " Il re nemico è sotto scacco." : "";
+  mostraCoach("neutro",t.nome,`<p>${t.tecnica}</p><p class="mini">Giochi il bianco: dai matto al re nero.${scacco}</p>`);
+}
 
 const VALORE={p:100,n:320,b:330,r:500,q:900,k:0};
 /* tabelle posizionali, dalla a8 alla h1, dal punto di vista del bianco */
@@ -1056,7 +1124,7 @@ function mossaBot(){
   const f=game.move(m);
   ultima=[f.from,f.to]; daAnimare={from:f.from,to:f.to}; storia.push(f.san);
   bot.pensa=false;
-  aggiornaStato();
+  app==="finale" ? statoFinale() : aggiornaStato();
   disegna();
 }
 
@@ -1101,7 +1169,7 @@ function aggiornaStato(){
 function clicLibero(casa){
   if(finita||bot.pensa) return;
   const turno=game.turn();
-  if(app==="bot" && turno!==bot.umano) return;
+  if(controBot() && turno!==bot.umano) return;
   const p=game.get(casa);
   if(p&&p.color===turno){ sel=(sel===casa?null:casa); return disegna(); }
   if(!sel) return;
@@ -1110,9 +1178,9 @@ function clicLibero(casa){
   if(!m) return disegna();
   ultima=[m.from,m.to]; daAnimare={from:m.from,to:m.to}; storia.push(m.san);
   if(app==="duo") lato=game.turn();   // la scacchiera si gira verso chi deve muovere
-  aggiornaStato();
+  app==="finale" ? statoFinale() : aggiornaStato();
   disegna();
-  if(app==="bot" && !finita) setTimeout(mossaBot,220);
+  if(controBot() && !finita) setTimeout(mossaBot,220);
 }
 
 /* --- schede --- */
@@ -1121,11 +1189,19 @@ function setApp(a){
   document.querySelectorAll("[data-tab]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.tab===a)));
   $("azioni-trainer").hidden = a!=="trainer";
   $("azioni-partita").hidden = a==="trainer";
-  $("btn-livello").hidden = a!=="bot";
-  $("btn-colore").hidden  = a!=="bot";
+  $("btn-livello").hidden = !controBot();
+  $("btn-colore").hidden  = a!=="bot";        // nei finali giochi sempre il bianco
   $("scelta-riga").hidden = a!=="trainer";
+  $("finale-riga").hidden = a!=="finale";
   $("legenda").hidden = true;
   if(a==="trainer"){ mostraRep=false; $("btn-repertorio").textContent="Mostra repertorio"; prepara(); }
+  else if(a==="finale"){
+    costruisciFinali();
+    $("istruzioni").textContent="Scegli un finale qui sopra, poi dai matto al re nero. Il motore difende.";
+    game=new Chess(); finaleCorrente=null; finita=false; storia=[]; ultima=null; lato="w"; sel=null;
+    mostraCoach("neutro","Finali",`<p>Un percorso di finali elementari, dal più semplice al più difficile. Scegline uno per cominciare: la posizione si carica e nel taccuino trovi la tecnica da seguire.</p>`);
+    disegna();
+  }
   else{
     $("istruzioni").textContent = a==="bot"
       ? "Tocca un pezzo per vedere le sue mosse legali. Le promozioni diventano automaticamente donna."
@@ -1135,17 +1211,19 @@ function setApp(a){
 }
 document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>setApp(b.dataset.tab));
 
-$("btn-nuova").onclick=()=>nuovaPartita();
+$("btn-nuova").onclick=()=>{ app==="finale" ? (finaleCorrente ? caricaFinale(FINALI.indexOf(finaleCorrente)) : setApp("finale")) : nuovaPartita(); };
 
 $("btn-annulla").onclick=()=>{
   if(bot.pensa||!storia.length) return;
+  if(app==="finale" && !finaleCorrente) return;
   game.undo(); storia.pop();
-  if(app==="bot" && storia.length && game.turn()!==bot.umano){ game.undo(); storia.pop(); }
+  if(controBot() && storia.length && game.turn()!==bot.umano){ game.undo(); storia.pop(); }
   if(app==="duo") lato=game.turn();
   finita=false; sel=null;
   const ult=game.history({verbose:true}).slice(-1)[0];
   ultima = ult ? [ult.from,ult.to] : null;
-  aggiornaStato(); disegna();
+  app==="finale" ? statoFinale() : aggiornaStato();
+  disegna();
 };
 
 $("btn-livello").onclick=()=>{
