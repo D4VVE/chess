@@ -984,9 +984,9 @@ function replicaLibroBianco(corpo){
 function valuta(m){
   // modalità database: si è già usciti dalle linee curate
   if(modoDB){
-    if(!inLibro(m.san)){
-      const cand=contLibro().map(c=>c.san);
-      game.undo(); disegna();
+    if(!mossaInLibroPre(m.san)){
+      const cand=contLibro().map(c=>c.san);   // ora la mossa è annullata: candidate del giusto colore
+      disegna();
       return mostraCoach("no","Fuori dal libro",
         `<p><span class="mossa">${m.san}</span> esce dalla teoria del database in questa posizione.</p>`+
         (cand.length?`<p>Restano in libro: ${cand.map(s=>`<span class="mossa">${s}</span>`).join(", ")}.</p>`:`<p class="mini">Qui il libro è esaurito.</p>`));
@@ -1004,12 +1004,12 @@ function valuta(m){
       return mostraCoach("no","Serve il repertorio esteso",
         `<p><span class="mossa">${m.san}</span> — ${voce.nota}</p><p class="mini">È una difesa rara: accendi <em>Repertorio esteso</em> per giocarla.</p>`);
     }
-    if(inLibro(m.san)){
+    if(mossaInLibroPre(m.san)){
       ultima=[m.from,m.to]; daAnimare={from:m.from,to:m.to}; storia.push(m.san);
       return replicaLibroBianco(`<p><span class="mossa">${m.san}</span> non è nelle mie linee commentate, ma è teoria: proseguo dal database.</p>`);
     }
-    const alt=risposte().map(([s])=>s);
-    game.undo(); disegna();
+    const alt=risposte().map(([s])=>s);   // la mossa è già annullata da mossaInLibroPre
+    disegna();
     mostraCoach("no","Fuori repertorio",
       `<p><span class="mossa">${m.san}</span> è legale, ma non fa parte della teoria in questa posizione.</p>
        <p>Qui il repertorio gioca: ${alt.map(a=>`<span class="mossa">${a}</span>`).join(", ")}.</p>
@@ -1124,6 +1124,15 @@ function inLibro(san){
   if(!ECOPREFIX) return false;
   const H=storiaSAN().join(" ");
   return ECOPREFIX.has((H?H+" ":"")+san.replace(/[+#!?]/g,""));
+}
+
+/* la mossa è già sulla scacchiera: verifica se era di libro sulla posizione PRECEDENTE.
+   Se sì la rigioca (resta sulla scacchiera), se no la lascia annullata. */
+function mossaInLibroPre(san){
+  game.undo();
+  const ok=inLibro(san);
+  if(ok) game.move(san);
+  return ok;
 }
 
 /* continuazioni di libro dalla posizione attuale: {san,to,nome} */
