@@ -127,6 +127,13 @@ button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transpar
 .san-valida{color:var(--testo)}
 .san-sideline{color:var(--testo-tenue)}
 .san-raro{color:var(--rosa)}
+.difesa{
+  position:absolute;bottom:2px;left:2px;right:2px;pointer-events:none;
+  font:600 min(2.3cqw,9px)/1.05 "Inter",sans-serif;
+  text-align:center;color:#fff;
+  background:rgba(18,24,28,.82);padding:2px 2px;border-radius:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
 .legenda{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--testo-tenue)}
 .legenda i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 .l1{box-shadow:inset 0 0 0 2px var(--ambra)}
@@ -216,7 +223,7 @@ button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transpar
 <div class="tavolo" id="tavolo">
   <div>
     <div class="scelte" id="tabs" style="margin-bottom:16px">
-      <button class="pill" data-tab="trainer" aria-pressed="true">Allenamento</button>
+      <button class="pill" data-tab="trainer" aria-pressed="true">Aperture</button>
       <button class="pill" data-tab="bot" aria-pressed="false">Contro il bot</button>
       <button class="pill" data-tab="duo" aria-pressed="false">Due giocatori</button>
       <button class="pill" data-tab="finale" aria-pressed="false">Finali</button>
@@ -722,11 +729,12 @@ const ETICHETTE={
   raro:["neutro","Rara o dubbia"]
 };
 
-let game, nodo=null, sel=null, ultima=null, storia=[], finita=false, mostraRep=false, esteso=false;
+let game, nodo=null, sel=null, ultima=null, storia=[], finita=false, mostraRep=true, esteso=false;
 let modo="scelta";   // "scelta" = prima mossa del bianco | "gioco" = risponde il nero | "bianco" = si sceglie la replica del bianco
 let lato="w";        // orientamento della scacchiera
 let biancoManuale=false;   // se acceso, le repliche del bianco le scegli tu
 let opzioniBianco=[];      // nodi fra cui scegliere nel modo "bianco"
+let modoDB=false;          // true quando la linea curata è finita e si continua dal database
 let daAnimare=null;        // {from,to} della mossa da far scivolare, consumata da disegna()
 const RIDOTTO = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -764,7 +772,7 @@ function costruisciScelte(){
 }
 
 function prepara(){
-  game=new Chess(); nodo=null; sel=null; ultima=null; storia=[]; finita=false; opzioniBianco=[];
+  game=new Chess(); nodo=null; sel=null; ultima=null; storia=[]; finita=false; opzioniBianco=[]; modoDB=false;
   modo="scelta"; lato="w";
   costruisciScelte();
   $("scelta-riga").hidden=false;
@@ -799,12 +807,15 @@ function giocaBianco(san){
 function caseRepertorio(){
   const mappa={};
   const legali=game.moves({verbose:true});
-  const voci = modo==="scelta" ? radici().map(n=>[n.san,{tag:n.tag}])
-             : modo==="bianco" ? opzioniBianco.map(n=>[n.san,{tag:n.tag}])
-             : finita ? [] : risposte();
-  for(const [san,voce] of voci){
-    const m=legali.find(x=>x.san===san);
-    if(m) mappa[m.to]={san,tag:voce.tag};
+  const trova=san=>legali.find(x=>x.san===san);
+  if(modo==="scelta"){
+    for(const n of radici()){ const m=trova(n.san); if(m) mappa[m.to]={san:n.san,tag:n.tag,nome:nomeDopo(n.san)}; }
+  }else if(modo==="bianco"){
+    for(const n of opzioniBianco){ const m=trova(n.san); if(m) mappa[m.to]={san:n.san,tag:n.tag,nome:nomeDopo(n.san)}; }
+  }else if(modoDB){
+    for(const c of contLibro()) mappa[c.to]={san:c.san,tag:"valida",nome:c.nome};
+  }else if(!finita){
+    for(const [san,voce] of risposte()){ const m=trova(san); if(m) mappa[m.to]={san,tag:voce.tag,nome:nomeDopo(san)}; }
   }
   return mappa;
 }
@@ -844,7 +855,10 @@ function disegna(){
       if(c===colonne[0]) html+=`<span class="coord rank ${suCasa}">${8-r}</span>`;
       if(r===righe[righe.length-1]) html+=`<span class="coord file ${suCasa}">${"abcdefgh"[c]}</span>`;
       const R=rep[casa];
-      if(R) html+=`<span class="rep rep-${R.tag}"></span><span class="san san-${R.tag}">${R.san}</span>`;
+      if(R){
+        html+=`<span class="rep rep-${R.tag}"></span><span class="san san-${R.tag}">${R.san}</span>`;
+        if(R.nome) html+=`<span class="difesa">${R.nome}</span>`;
+      }
       d.innerHTML=html;
       d.onclick=()=>clic(casa);
       if(daAnimare && casa===daAnimare.to) d.dataset.arrivo="1";
@@ -943,23 +957,67 @@ function valutaApertura(m){
   avvia(i);
 }
 
+function nomeDopo(san){
+  if(!ECOPREFIX) return null;
+  const H=storiaSAN().join(" ");
+  const key=(H?H+" ":"")+san.replace(/[+#!?]/g,"");
+  return famigliaIT(ECO[key]||ECOFAM.get(key));
+}
+
+/* il bianco prosegue a libro; se non può, la teoria finisce */
+function replicaLibroBianco(corpo){
+  const b=mossaLibroBianco();
+  if(!b){
+    finita=true;
+    mostraCoach("neutro","Fine del libro",
+      corpo+`<p>Da qui il database non registra più una continuazione teorica. Sei uscito dall'apertura: ora si gioca a scacchi.</p><p class="mini">Ricomincia per allenare un'altra linea.</p>`);
+    disegna(); return;
+  }
+  giocaBianco(b.san);
+  modoDB=true; nodo=null; modo="gioco";
+  const nomeOra=famigliaIT(ECO[storiaSAN().join(" ")]||ECOFAM.get(storiaSAN().join(" ")));
+  mostraCoach("neutro", nomeOra||"A libro",
+    corpo+`<p>Il bianco continua con <span class="mossa">${b.san}</span>${b.nome?` — ${b.nome}`:""}. Rispondi restando nel libro; le mosse teoriche sono segnate sulla scacchiera.</p>`);
+  disegna();
+}
+
 function valuta(m){
+  // modalità database: si è già usciti dalle linee curate
+  if(modoDB){
+    if(!inLibro(m.san)){
+      const cand=contLibro().map(c=>c.san);
+      game.undo(); disegna();
+      return mostraCoach("no","Fuori dal libro",
+        `<p><span class="mossa">${m.san}</span> esce dalla teoria del database in questa posizione.</p>`+
+        (cand.length?`<p>Restano in libro: ${cand.map(s=>`<span class="mossa">${s}</span>`).join(", ")}.</p>`:`<p class="mini">Qui il libro è esaurito.</p>`));
+    }
+    ultima=[m.from,m.to]; daAnimare={from:m.from,to:m.to}; storia.push(m.san);
+    return replicaLibroBianco(`<p><span class="mossa">${m.san}</span> resta nel libro.</p>`);
+  }
+
   const voce = nodo.nere && nodo.nere[m.san];
+
+  // mossa non curata: se è comunque nel database, si prosegue a libro
   if(!voce || !ammessa(voce)){
+    if(voce && !ammessa(voce)){
+      game.undo(); disegna();
+      return mostraCoach("no","Serve il repertorio esteso",
+        `<p><span class="mossa">${m.san}</span> — ${voce.nota}</p><p class="mini">È una difesa rara: accendi <em>Repertorio esteso</em> per giocarla.</p>`);
+    }
+    if(inLibro(m.san)){
+      ultima=[m.from,m.to]; daAnimare={from:m.from,to:m.to}; storia.push(m.san);
+      return replicaLibroBianco(`<p><span class="mossa">${m.san}</span> non è nelle mie linee commentate, ma è teoria: proseguo dal database.</p>`);
+    }
     const alt=risposte().map(([s])=>s);
-    const bloccata = voce && !ammessa(voce);
-    game.undo();
-    disegna();
-    mostraCoach("no", bloccata ? "Serve il repertorio esteso" : "Fuori repertorio",
-      bloccata
-      ? `<p><span class="mossa">${m.san}</span> — ${voce.nota}</p>
-         <p class="mini">È una difesa rara: accendi <em>Repertorio esteso</em> per giocarla.</p>`
-      : `<p><span class="mossa">${m.san}</span> è legale, ma non fa parte delle risposte teoriche in questa posizione.</p>
-         <p>Qui il repertorio gioca: ${alt.map(a=>`<span class="mossa">${a}</span>`).join(", ")}.</p>
-         <p class="mini">Riprova con una mossa di repertorio.</p>`);
+    game.undo(); disegna();
+    mostraCoach("no","Fuori repertorio",
+      `<p><span class="mossa">${m.san}</span> è legale, ma non fa parte della teoria in questa posizione.</p>
+       <p>Qui il repertorio gioca: ${alt.map(a=>`<span class="mossa">${a}</span>`).join(", ")}.</p>
+       <p class="mini">Riprova con una mossa di repertorio.</p>`);
     ultimaTentata=m.san;
     return;
   }
+
   ultima=[m.from,m.to];
   daAnimare={from:m.from,to:m.to};
   storia.push(m.san);
@@ -971,8 +1029,7 @@ function valuta(m){
   if(voce.poi){
     const lista=(Array.isArray(voce.poi)?voce.poi:[voce.poi]).filter(n=>ammessa(n));
     if(!lista.length){
-      finita=true;
-      corpo+=`<p>Fine della linea.</p>`;
+      return replicaLibroBianco(corpo);   // linea curata esaurita: continua a libro
     }else if(biancoManuale && lista.length>1){
       opzioniBianco=lista;
       modo="bianco";
@@ -988,9 +1045,7 @@ function valuta(m){
       if(altri.length) corpo+=`<p class="mini">Poteva anche giocare ${altri.map(a=>`<span class="mossa">${a.san}</span>`).join(", ")}.</p>`;
     }
   }else{
-    finita=true;
-    corpo+=`<p>Fine della linea. Hai raggiunto una posizione di apertura sana: pezzi sviluppati, centro contestato, re presto al sicuro.</p>
-            <p class="mini">Cambia apertura per allenarne un'altra.</p>`;
+    return replicaLibroBianco(corpo);     // foglia curata: continua a libro
   }
   mostraCoach(cls,tit,corpo);
   disegna();
@@ -1015,8 +1070,93 @@ function aggiornaLinea(){
 }
 
 /* --- database aperture (lichess ECO, CC0), caricato da eco.json se presente --- */
-let ECO=null;
-fetch("eco.json").then(r=>r.ok?r.json():null).then(d=>{ ECO=d; aggiornaNomeApertura(); }).catch(()=>{});
+let ECO=null, ECOPREFIX=null, ECOFAM=null;
+fetch("eco.json").then(r=>r.ok?r.json():null).then(d=>{ if(d){ ECO=d; indicizzaECO(); } aggiornaNomeApertura(); if(mostraRep) disegna(); }).catch(()=>{});
+
+function indicizzaECO(){
+  ECOPREFIX=new Set(); ECOFAM=new Map();
+  for(const K in ECO){
+    const parts=K.split(" "); let pref="";
+    for(let i=0;i<parts.length;i++){
+      pref = i? pref+" "+parts[i] : parts[i];
+      ECOPREFIX.add(pref);
+      if(!ECOFAM.has(pref)) ECOFAM.set(pref, ECO[K]);   // linea più corta = famiglia
+    }
+  }
+}
+
+/* nomi delle famiglie in italiano per la sovraimpressione */
+const FAM_IT={
+ "Sicilian Defense":"Siciliana","French Defense":"Francese","Caro-Kann Defense":"Caro-Kann",
+ "Ruy Lopez":"Spagnola","Italian Game":"Italiana","Scotch Game":"Scozzese","Russian Game":"Petroff",
+ "Petrov's Defense":"Petroff","Philidor Defense":"Philidor","Vienna Game":"Viennese",
+ "King's Gambit":"Gambetto di Re","King's Gambit Accepted":"Gambetto di Re","King's Gambit Declined":"Gambetto di Re",
+ "Bishop's Opening":"App. dell'Alfiere","Center Game":"Partita di Centro","Ponziani Opening":"Ponziani",
+ "Four Knights Game":"Quattro Cavalli","Three Knights Opening":"Tre Cavalli",
+ "Scandinavian Defense":"Scandinava","Alekhine Defense":"Alekhine","Pirc Defense":"Pirc",
+ "Modern Defense":"Moderna","Nimzowitsch Defense":"Nimzowitsch","Owen Defense":"Owen",
+ "Queen's Gambit Declined":"Gambetto Donna rif.","Queen's Gambit Accepted":"Gambetto Donna acc.",
+ "Queen's Gambit":"Gambetto di Donna","Slav Defense":"Slava","Semi-Slav Defense":"Semi-Slava",
+ "Nimzo-Indian Defense":"Nimzo-Indiana","Queen's Indian Defense":"Ovest-Indiana",
+ "King's Indian Defense":"Est-Indiana","Grünfeld Defense":"Grünfeld","Grunfeld Defense":"Grünfeld",
+ "Catalan Opening":"Catalana","Benoni Defense":"Benoni","Benko Gambit":"Benko",
+ "Dutch Defense":"Olandese","English Opening":"Inglese","Réti Opening":"Réti","Reti Opening":"Réti",
+ "Bird Opening":"Bird","London System":"Londra","Trompowsky Attack":"Trompowsky",
+ "Nimzo-Larsen Attack":"Nimzo-Larsen","Zukertort Opening":"Réti","King's Pawn Game":"Apertura di Re",
+ "Queen's Pawn Game":"Apertura di Donna","Van't Kruijs Opening":"Van 't Kruijs","Hungarian Opening":"Benko",
+ "Indian Game":"Indiana","Horwitz Defense":"Horwitz","Old Indian Defense":"Est-Ind. antica",
+ "Blackmar-Diemer Gambit":"Blackmar-Diemer","Danish Gambit":"Gambetto Danese","Evans Gambit":"Gambetto Evans",
+ "Two Knights Defense":"Due Cavalli","Giuoco Piano":"Giuoco Piano","Semi-Italian Opening":"Italiana",
+ "Anderssen's Opening":"Anderssen","Polish Opening":"Orango","Sokolsky Opening":"Orango",
+};
+function famigliaIT(v){
+  if(!v) return null;
+  const nome=v.split("|")[1]||v;         // v = "ECO|Nome"
+  const fam=nome.split(":")[0].trim();
+  return FAM_IT[fam]||fam;
+}
+
+/* storia normalizzata (senza scacco/annotazioni) */
+function storiaSAN(){ return game.history().map(s=>s.replace(/[+#!?]/g,"")); }
+
+/* una mossa (SAN) resta nel libro dalla posizione attuale? */
+function inLibro(san){
+  if(!ECOPREFIX) return false;
+  const H=storiaSAN().join(" ");
+  return ECOPREFIX.has((H?H+" ":"")+san.replace(/[+#!?]/g,""));
+}
+
+/* continuazioni di libro dalla posizione attuale: {san,to,nome} */
+function contLibro(){
+  if(!ECOPREFIX) return [];
+  const H=storiaSAN().join(" ");
+  const pref = H? H+" " : "";
+  const out=[];
+  for(const m of game.moves({verbose:true})){
+    const san=m.san.replace(/[+#!?]/g,"");
+    const key=pref+san;
+    if(ECOPREFIX.has(key)) out.push({san:m.san,to:m.to,nome:famigliaIT(ECO[key]||ECOFAM.get(key))});
+  }
+  return out;
+}
+
+/* quante linee del database passano da questa mossa (proxy di popolarità) */
+function pesoLinea(san){
+  const H=storiaSAN().join(" ");
+  const key=(H?H+" ":"")+san.replace(/[+#!?]/g,"");
+  let n=0;
+  for(const K in ECO){ if(K===key||K.startsWith(key+" ")) n++; }
+  return n;
+}
+
+/* la replica del bianco a libro: la linea più analizzata */
+function mossaLibroBianco(){
+  const c=contLibro();
+  if(!c.length) return null;
+  let best=c[0], peso=-1;
+  for(const x of c){ const p=pesoLinea(x.san); if(p>peso){ peso=p; best=x; } }
+  return best;
+}
 
 function nomeApertura(){
   if(!ECO || app==="finale") return null;   // i finali partono da posizioni proprie
@@ -1272,7 +1412,13 @@ function setApp(a){
   $("scelta-riga").hidden = a!=="trainer";
   $("finale-riga").hidden = a!=="finale";
   $("legenda").hidden = true;
-  if(a==="trainer"){ mostraRep=false; $("btn-repertorio").textContent="Mostra repertorio"; prepara(); }
+  if(a==="trainer"){
+    mostraRep=true;
+    $("btn-repertorio").textContent="Nascondi repertorio";
+    $("btn-repertorio").setAttribute("aria-pressed","true");
+    $("legenda").hidden=false; $("leg-raro").hidden=!esteso;
+    prepara();
+  }
   else if(a==="finale"){
     costruisciFinali();
     $("istruzioni").textContent="Scegli un finale qui sopra, poi dai matto al re nero. Il motore difende.";
@@ -1316,7 +1462,7 @@ $("btn-colore").onclick=()=>{
 };
 
 /* --- avvio --- */
-prepara();
+setApp("trainer");
 </script>
 </body>
 </html>
