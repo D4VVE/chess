@@ -141,6 +141,15 @@ button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transpar
   color:var(--testo-tenue);padding:13px 15px;border-bottom:1px solid var(--riga);
 }
 #linea{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+#apertura{
+  padding:10px 15px;border-bottom:1px solid var(--riga);
+  display:flex;align-items:baseline;gap:9px;
+}
+#apertura .eco{
+  font:600 10px/1 ui-monospace,monospace;letter-spacing:.06em;
+  color:#1a1206;background:var(--ambra);padding:3px 6px;border-radius:3px;flex:none;
+}
+#apertura .nome{font-size:13px;color:var(--testo)}
 #linea .riga{display:grid;grid-template-columns:34px 1fr 1fr;border-bottom:1px solid var(--riga)}
 #linea .riga>*{padding:8px 10px}
 #linea .n{color:var(--testo-tenue)}
@@ -247,6 +256,7 @@ button{font:inherit;cursor:pointer;border:0;-webkit-tap-highlight-color:transpar
   <aside>
     <div class="taccuino">
       <h2 id="titolo-linea">Partita</h2>
+      <div id="apertura" hidden></div>
       <div id="linea"></div>
       <div id="coach"></div>
     </div>
@@ -275,7 +285,18 @@ F("e4","Apertura di Re. Occupa il centro e libera donna e alfiere di casa f1 in 
             F("Ba4","Il bianco mantiene la pressione sulla diagonale.",{
               "Nf6": M("principale","Sviluppo con attacco a e4. Il nero non perde tempo a proteggere: contrattacca.",
                 F("O-O","Il bianco arrocca e offre il pedone e4 (variante aperta).",{
-                  "Be7": M("principale","Variante chiusa: il nero completa lo sviluppo e arrocca. Solida, la scelta dei campioni del mondo."),
+                  "Be7": M("principale","Variante chiusa: il nero completa lo sviluppo e prepara l'arrocco. Solida, la scelta dei campioni del mondo.",
+                    F("Re1","Il bianco rinforza e4 e prepara c3-d4.",{
+                      "b5": M("principale","Scaccia l'alfiere prima che l'inchiodatura su c6 diventi fastidiosa.",
+                        F("Bb3","L'alfiere si ritira sulla diagonale a2-g8, puntato su f7.",{
+                          "d6": M("principale","Sostiene e5 e apre l'alfiere di c8. Si entra nelle strutture classiche della Spagnola.",
+                            F("c3","Prepara d4, il grande piano del bianco: il centro di pedoni.",{
+                              "O-O": M("principale","Il nero mette il re al sicuro. Da qui la teoria si ramifica all'infinito (Chigorin, Breyer, Zaitsev)."),
+                              "Na5": M("valida","Variante Chigorin. Il cavallo scaccia l'alfiere b3 per poi chiudere il centro con ...c5.")
+                            }))
+                        })),
+                      "d6": M("valida","Solido e diretto, ma permette al bianco di sviluppare comodamente prima di ...b5.")
+                    })),
                   "Nxe4": M("valida","Variante aperta. Prendere è giocabile ma il pedone non si tiene: dopo 6.d4 il bianco riguadagna materiale con iniziativa.")
                 })),
               "b5": M("valida","Scaccia l'alfiere subito, ma indebolisce le case chiare a lungo termine. Meglio inserirla dopo aver sviluppato.")
@@ -290,8 +311,23 @@ F("e4","Apertura di Re. Occupa il centro e libera donna e alfiere di casa f1 in 
           "d6": M("sideline","Difesa Steinitz. Corretta ma passiva: chiude l'alfiere di c8.")
         }),
         F("Bc4","Partita Italiana. L'alfiere punta a f7, la casa più debole del campo nero. Sviluppo naturale e piani chiari: l'apertura da cui si comincia.",{
-          "Bc5": M("principale","Giuoco Piano. Simmetria perfetta: entrambi gli alfieri guardano il punto debole avversario."),
-          "Nf6": M("valida","Difesa dei Due Cavalli. Combattiva: invita 4.Ng5, che attacca f7 ma muove due volte lo stesso pezzo."),
+          "Bc5": M("principale","Giuoco Piano. Simmetria perfetta: entrambi gli alfieri guardano il punto debole avversario.",
+            F("c3","Prepara d4 e la costruzione del centro. È il piano tipico dell'Italiana lenta.",{
+              "Nf6": M("principale","Sviluppo con attacco a e4. Il nero non aspetta.",
+                F("d3","Il Giuoco Pianissimo moderno: centro modesto, gioco di manovra lungo. La moda degli ultimi anni.",{
+                  "d6": M("principale","Simmetria e solidità. Entrambi manovrano dietro le linee prima di rompere il centro."),
+                  "a6": M("valida","Prepara ...Ba7 per togliere l'alfiere dalla presa di un futuro b4-b5.")
+                })),
+              "Qe7": M("sideline","Difende e5 in modo solido ma passivo, chiudendo l'alfiere di f8.")
+            })),
+          "Nf6": M("valida","Difesa dei Due Cavalli. Combattiva: invita 4.Ng5, che attacca f7 ma muove due volte lo stesso pezzo.",
+            F("Ng5","Attacca f7 subito. Aggressivo e molto teorico: la mossa che rende la difesa tagliente.",{
+              "d5": M("principale","L'unica: si chiude la diagonale dell'alfiere c4 restituendo un pedone.",
+                F("exd5","Il bianco cattura.",{
+                  "Na5": M("principale","Variante principale. Il cavallo attacca l'alfiere c4 invece di riprendere subito in d5, evitando la trappola del Fegatello."),
+                  "Nxd5": M("sideline","Rischioso: apre la strada all'Attacco Fegatello con 5.Nxf7!?, un sacrificio classico.")
+                }))
+            })),
           "Be7": M("sideline","Difesa ungherese. Solida e modesta: si rinuncia a ogni ambizione per non concedere nulla.")
         },"valida"),
         F("d4","Partita Scozzese. Il bianco apre il centro subito invece di manovrare. Rapida, tagliente, meno teorica della Spagnola.",{
@@ -337,7 +373,23 @@ F("e4","Apertura di Re. Occupa il centro e libera donna e alfiere di casa f1 in 
             F("Nxd4","Il cavallo si porta al centro.",{
               "Nf6": M("principale","Attacca e4 e costringe il bianco a difenderlo, di solito con Nc3.",
                 F("Nc3","Difende e4 sviluppando. Ora il nero sceglie il proprio sistema.",{
-                  "a6": M("principale","Variante Najdorf. Toglie b5 a pezzi bianchi e prepara ...e5 o ...e6. La difesa preferita di Fischer e Kasparov."),
+                  "a6": M("principale","Variante Najdorf. Toglie b5 a pezzi bianchi e prepara ...e5 o ...e6. La difesa preferita di Fischer e Kasparov.",
+                   [
+                    F("Be2","Variante classica. Sviluppo tranquillo e arrocco: il bianco rinuncia alle linee più affilate per un vantaggio duraturo di spazio.",{
+                      "e5": M("principale","Il colpo tematico della Najdorf: si conquista spazio al centro e si scaccia il cavallo di d4."),
+                      "e6": M("valida","Struttura Scheveningen, più contenuta e flessibile.")
+                    }),
+                    F("Bg5","Il vecchio attacco principale. Inchioda il cavallo f6 e minaccia rotture sull'ala di re. Il territorio più teorico degli scacchi.",{
+                      "e6": M("principale","Dà aria al re e prepara a rompere l'inchiodatura con ...Be7 o ...h6.")
+                    },"valida"),
+                    F("Be3","Attacco inglese. Il bianco prepara f3, Qd2 e l'arrocco lungo per assaltare a colpi di pedone sull'ala di re.",{
+                      "e5": M("principale","Najdorf classica: si prende spazio prima che il bianco lanci i pedoni."),
+                      "e6": M("valida","Struttura ibrida verso lo Scheveningen, molto elastica.")
+                    },"valida"),
+                    F("f3","Preparazione diretta all'attacco inglese, senza sviluppare l'alfiere per ora.",{
+                      "e5": M("principale","Si contende subito il centro.")
+                    },"sideline")
+                   ]),
                   "g6": M("valida","Variante del Drago. L'alfiere in g7 spara sulla diagonale lunga. Doppio filo: il bianco attacca sull'ala di re, il nero sulla colonna c."),
                   "e6": M("valida","Scheveningen. Struttura a piccolo centro, elastica e solida, ma richiede precisione."),
                   "Nc6": M("valida","Classica. Sviluppo diretto, senza impegnarsi troppo presto.")
@@ -655,8 +707,8 @@ const PATH={
  k:'<path d="M20 7h5v3.5h3.5v5H25V25h-5V15.5h-3.5v-5H20z"/><path d="M15 33q-2.5-9 7.5-9t7.5 9z"/><path d="M12.5 33h20l1.8 5.5H10.7z"/>'
 };
 const COL={
- w:{fill:"#FBF7EE",stroke:"#1B2226",eye:"#1B2226"},
- b:{fill:"#1B2226",stroke:"#EFE9DC",eye:"#EFE9DC"}
+ w:{fill:"#FFFFFF",stroke:"#000000",eye:"#000000"},
+ b:{fill:"#000000",stroke:"#FFFFFF",eye:"#FFFFFF"}
 };
 function pezzoSVG(t,color){
   const c=COL[color];
@@ -951,12 +1003,38 @@ function mostraCoach(cls,tit,html){
 }
 
 function aggiornaLinea(){
-  if(!storia.length){ lineaEl.innerHTML=`<div class="vuoto">Nessuna mossa.</div>`; return; }
-  let h="";
-  for(let i=0;i<storia.length;i+=2){
-    h+=`<div class="riga"><span class="n">${i/2+1}.</span><span>${storia[i]}</span><span class="nero">${storia[i+1]||"…"}</span></div>`;
+  if(!storia.length){ lineaEl.innerHTML=`<div class="vuoto">Nessuna mossa.</div>`; }
+  else{
+    let h="";
+    for(let i=0;i<storia.length;i+=2){
+      h+=`<div class="riga"><span class="n">${i/2+1}.</span><span>${storia[i]}</span><span class="nero">${storia[i+1]||"…"}</span></div>`;
+    }
+    lineaEl.innerHTML=h;
   }
-  lineaEl.innerHTML=h;
+  aggiornaNomeApertura();
+}
+
+/* --- database aperture (lichess ECO, CC0), caricato da eco.json se presente --- */
+let ECO=null;
+fetch("eco.json").then(r=>r.ok?r.json():null).then(d=>{ ECO=d; aggiornaNomeApertura(); }).catch(()=>{});
+
+function nomeApertura(){
+  if(!ECO || app==="finale") return null;   // i finali partono da posizioni proprie
+  const sans=game.history().map(s=>s.replace(/[+#!?]/g,""));
+  for(let n=Math.min(sans.length,36); n>=1; n--){
+    const v=ECO[sans.slice(0,n).join(" ")];
+    if(v) return v;   // "ECO|Nome"
+  }
+  return null;
+}
+
+function aggiornaNomeApertura(){
+  const box=$("apertura"); if(!box) return;
+  const v=nomeApertura();
+  if(!v){ box.hidden=true; box.innerHTML=""; return; }
+  const [eco,nome]=v.split("|");
+  box.hidden=false;
+  box.innerHTML=`<span class="eco">${eco}</span><span class="nome">${nome}</span>`;
 }
 
 /* --- azioni --- */
